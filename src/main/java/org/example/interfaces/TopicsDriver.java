@@ -1,6 +1,6 @@
 package org.example.interfaces;
 
-import org.example.server.TopicData;
+import org.example.server.topics.TopicData;
 
 public interface TopicsDriver {
 

@@ -5,12 +5,18 @@ import org.example.config.Config;
 import org.example.config.ConfigLoader;
 import org.example.exceptions.ValidationException;
 import org.example.interfaces.*;
+import org.example.server.messages_to_send.MessagesToSendQueue;
+import org.example.server.messages_to_send.Notification;
+import org.example.server.receive_message.ReceivedMessage;
+import org.example.server.receive_message.ReceivedMessagesQueue;
+import org.example.server.receive_message.ReceivedMessagesQueueMonitorThread;
+import org.example.server.topics.TopicData;
 import org.example.utilities.Validator;
 
 import java.io.IOException;
 import java.util.*;
 
-public class Server implements Runnable, ClientsListDriver, ReceiveDriver, MessagesQueueDriver, TopicsDriver {
+public class Server implements Runnable, ClientsListDriver, ReceiveDriver, MessagesQueueDriver, TopicsDriver, ServerController {
     private final Config config;
     private final Thread communicationThread, uiThread, receivedMessagesQueueMonitorThread;
 
@@ -35,7 +41,7 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
 
         this.communicationThread = new CommunicationThread(this, this, hostname, port, timeout);
         this.receivedMessagesQueueMonitorThread = new ReceivedMessagesQueueMonitorThread(this);
-        this.uiThread = new UIThread();
+        this.uiThread = new UIThread(this);
 
         this.clientList = Collections.synchronizedSet(new HashSet<>());
         this.registeredTopics = Collections.synchronizedMap(new HashMap<>());
@@ -112,6 +118,9 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
     }
 
 
+    /* TopicsDriver */
+
+
     @Override
     public void addTopic(String topicName, TopicData topicData) {
         registeredTopics.put(topicName, topicData);
@@ -121,5 +130,14 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
     @Override
     public void removeTopic(String topicName) {
         registeredTopics.remove(topicName);
+    }
+
+
+    /* ServerController */
+
+
+    @Override
+    public Map<String, TopicData> getTopics() {
+        return new HashMap<>(registeredTopics);
     }
 }

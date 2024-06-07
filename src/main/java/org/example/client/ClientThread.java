@@ -2,7 +2,7 @@ package org.example.client;
 
 import org.example.interfaces.ClientsListDriver;
 import org.example.interfaces.ReceiveDriver;
-import org.example.server.ReceivedMessage;
+import org.example.server.receive_message.ReceivedMessage;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -16,6 +16,9 @@ import static org.example.settings.Settings.MAX_TRANSFER_BYTES;
 public class ClientThread extends Thread {
 
     private final Socket clientSocket;
+
+    private String clientId;
+
     private final DataOutputStream outputStream;
     private final DataInputStream inputStream;
     private final ClientsListDriver clientsListDriver;
@@ -95,4 +98,12 @@ public class ClientThread extends Thread {
         }
     }
 
+
+    public synchronized String getClientId() {
+        return clientId;
+    }
+
+    public synchronized void setClientId(String clientId) {
+        this.clientId = clientId;
+    }
 }

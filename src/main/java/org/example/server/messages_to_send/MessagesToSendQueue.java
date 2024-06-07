@@ -1,4 +1,4 @@
-package org.example.server;
+package org.example.server.messages_to_send;
 
 import org.example.interfaces.AddElementCallback;
 

@@ -1,7 +1,7 @@
 package org.example.interfaces;
 
 import org.example.client.ClientThread;
-import org.example.server.ReceivedMessage;
+import org.example.server.receive_message.ReceivedMessage;
 
 import java.util.List;
 

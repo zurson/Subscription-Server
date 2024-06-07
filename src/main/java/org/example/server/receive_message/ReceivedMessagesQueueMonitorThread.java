@@ -1,5 +1,6 @@
-package org.example.server;
+package org.example.server.receive_message;
 
+import org.example.client.ClientThread;
 import org.example.interfaces.MessagesQueueDriver;
 import org.example.utilities.Validator;
 
@@ -38,17 +39,23 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
 
 
     private void manageMessage(ReceivedMessage receivedMessage) {
-        try {
+        String content = receivedMessage.content();
+        ClientThread client = receivedMessage.client();
 
-            if (!Validator.isValidReceivedMessage(receivedMessage.content())) {
-                receivedMessage.client().sendMessage("Validation error");
+        try {
+            if (!Validator.isValidReceivedMessage(content)) {
+                client.sendMessage("Validation error");
                 return;
             }
 
-            messagesQueueDriver.addMessageToSendQueue("OKEJ", Collections.singletonList(receivedMessage.client()));
+            // TODO: parsing JSON into class
+
+            client.setClientId("TEST ID");
+
+            messagesQueueDriver.addMessageToSendQueue("OKEJ", Collections.singletonList(client));
 
         } catch (IOException e) {
-            receivedMessage.client().disconnect();
+            client.disconnect();
         }
     }
 

@@ -1,4 +1,4 @@
-package org.example.server;
+package org.example.server.receive_message;
 
 import org.example.client.ClientThread;
 
