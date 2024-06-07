@@ -28,7 +28,6 @@ public class UIThread extends Thread {
             if (input.isBlank())
                 continue;
 
-            System.out.println("\n");
             boolean status = processCommand(input);
 
             if (!status)
