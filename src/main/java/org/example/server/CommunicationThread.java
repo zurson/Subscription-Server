@@ -1,7 +1,8 @@
 package org.example.server;
 
 import org.example.client.ClientThread;
-import org.example.interfaces.ServerDriver;
+import org.example.interfaces.ClientsListDriver;
+import org.example.interfaces.ReceiveDriver;
 
 import java.io.IOException;
 import java.net.*;
@@ -11,13 +12,15 @@ public class CommunicationThread extends Thread {
     private final int port;
     private final String hostname;
     private final ServerSocket serverSocket;
-    private final ServerDriver serverDriver;
+    private final ClientsListDriver clientsListDriver;
+    private final ReceiveDriver receiveDriver;
 
 
-    public CommunicationThread(ServerDriver serverDriver, String hostname, int port, int timeout) throws IOException {
+    public CommunicationThread(ClientsListDriver clientsListDriver, ReceiveDriver receiveDriver, String hostname, int port, int timeout) throws IOException {
         this.hostname = hostname;
         this.port = port;
-        this.serverDriver = serverDriver;
+        this.clientsListDriver = clientsListDriver;
+        this.receiveDriver = receiveDriver;
 
         serverSocket = new ServerSocket();
         serverSocket.setSoTimeout(timeout);
@@ -54,7 +57,7 @@ public class CommunicationThread extends Thread {
 
             try {
                 ClientThread clientThread = spawnClientThread(clientSocket);
-                serverDriver.addClient(clientThread);
+                clientsListDriver.addClient(clientThread);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -69,7 +72,7 @@ public class CommunicationThread extends Thread {
 
 
     private ClientThread spawnClientThread(Socket clientSocket) throws IOException {
-        ClientThread clientThread = new ClientThread(serverDriver, clientSocket);
+        ClientThread clientThread = new ClientThread(clientsListDriver, receiveDriver, clientSocket);
         Thread thread = new Thread(clientThread);
         thread.setDaemon(true);
         thread.start();

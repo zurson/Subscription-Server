@@ -14,12 +14,21 @@ public class Validator {
         return ipv4Matcher.matches();
     }
 
+
     public static boolean isValidPort(int port) {
         return port >= 1 && port <= 65535;
     }
+
 
     public static boolean isValidTimeout(int timeout) {
         return timeout >= 1;
     }
 
+
+    public static boolean isValidReceivedMessage(String receivedMessage) {
+        if (receivedMessage == null || receivedMessage.isEmpty())
+            return false;
+
+        return true;
+    }
 }

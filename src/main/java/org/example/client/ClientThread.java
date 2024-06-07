@@ -1,6 +1,8 @@
 package org.example.client;
 
-import org.example.interfaces.ServerDriver;
+import org.example.interfaces.ClientsListDriver;
+import org.example.interfaces.ReceiveDriver;
+import org.example.server.ReceivedMessage;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -16,14 +18,16 @@ public class ClientThread extends Thread {
     private final Socket clientSocket;
     private final DataOutputStream outputStream;
     private final DataInputStream inputStream;
-    private final ServerDriver serverDriver;
+    private final ClientsListDriver clientsListDriver;
+    private final ReceiveDriver receiveDriver;
 
 
-    public ClientThread(ServerDriver serverDriver, Socket clientSocket) throws IOException {
+    public ClientThread(ClientsListDriver clientsListDriver, ReceiveDriver receiveDriver, Socket clientSocket) throws IOException {
         if (clientSocket == null || clientSocket.isClosed())
             throw new IOException("Socket null or closed");
 
-        this.serverDriver = serverDriver;
+        this.clientsListDriver = clientsListDriver;
+        this.receiveDriver = receiveDriver;
         this.clientSocket = clientSocket;
         this.outputStream = new DataOutputStream(this.clientSocket.getOutputStream());
         this.inputStream = new DataInputStream(this.clientSocket.getInputStream());
@@ -34,17 +38,16 @@ public class ClientThread extends Thread {
     public void run() {
         while (true) {
             try {
-
                 String recvMessage = recvMessage();
-                System.out.println(recvMessage);
-
+                receiveDriver.addNewMessage(new ReceivedMessage(recvMessage, this));
             } catch (IOException e) {
-                e.printStackTrace();
-                serverDriver.removeClient(this);
+                System.out.println("Client " + clientSocket.getRemoteSocketAddress() + " disconnected");
+                disconnect();
                 break;
             }
         }
     }
+
 
     public int sendMessage(String message) throws IOException {
         if (!clientSocket.isConnected())
@@ -80,7 +83,7 @@ public class ClientThread extends Thread {
 
 
     public void disconnect() {
-        if (clientSocket == null || clientSocket.isClosed())
+        if (clientSocket == null)
             return;
 
         try {
@@ -88,7 +91,7 @@ public class ClientThread extends Thread {
         } catch (IOException e) {
             e.printStackTrace();
         } finally {
-            serverDriver.removeClient(this);
+            clientsListDriver.removeClient(this);
         }
     }
 
