@@ -40,7 +40,7 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
         this.config = new ConfigLoader().loadConfig();
 
         this.communicationThread = new CommunicationThread(this, this, hostname, port, timeout);
-        this.receivedMessagesQueueMonitorThread = new ReceivedMessagesQueueMonitorThread(this);
+        this.receivedMessagesQueueMonitorThread = new ReceivedMessagesQueueMonitorThread(this, this);
         this.uiThread = new UIThread(this);
 
         this.clientList = Collections.synchronizedSet(new HashSet<>());
@@ -85,6 +85,9 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
     }
 
 
+    /* ClientsListDriver */
+
+
     @Override
     public void addClient(ClientThread clientThread) {
         clientList.add(clientThread);
@@ -99,10 +102,16 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
     }
 
 
+    /* ReceiveDriver */
+
+
     @Override
     public void addNewMessage(ReceivedMessage receivedMessage) {
         receivedMessagesQueue.add(receivedMessage);
     }
+
+
+    /* MessagesQueueDriver */
 
 
     @Override
@@ -130,6 +139,25 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
     @Override
     public void removeTopic(String topicName) {
         registeredTopics.remove(topicName);
+    }
+
+    @Override
+    public boolean topicExists(String topicName) {
+        synchronized (registeredTopics) {
+            return registeredTopics.containsKey(topicName);
+        }
+    }
+
+    @Override
+    public boolean producerExists(String producerId) {
+        synchronized (registeredTopics) {
+            for (TopicData topicData : registeredTopics.values()) {
+                if (topicData.producer().getClientId().equalsIgnoreCase(producerId))
+                    return true;
+            }
+
+            return false;
+        }
     }
 
 

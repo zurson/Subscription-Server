@@ -24,11 +24,4 @@ public class Validator {
         return timeout >= 1;
     }
 
-
-    public static boolean isValidReceivedMessage(String receivedMessage) {
-        if (receivedMessage == null || receivedMessage.isEmpty())
-            return false;
-
-        return true;
-    }
 }

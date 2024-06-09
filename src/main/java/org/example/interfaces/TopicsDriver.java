@@ -8,4 +8,7 @@ public interface TopicsDriver {
 
     void removeTopic(String topicName);
 
+    boolean topicExists(String topicName);
+
+    boolean producerExists(String producerId);
 }
