@@ -133,6 +133,13 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
     @Override
     public void addTopic(String topicName, TopicData topicData) {
         registeredTopics.put(topicName, topicData);
+
+        synchronized (registeredTopics) {
+            System.out.println("Added new topic: " + topicName);
+            for (Map.Entry<String, TopicData> entry : registeredTopics.entrySet()) {
+                System.out.print(entry.getKey() + ": " + entry.getValue().getSubscribers());
+            }
+        }
     }
 
 
@@ -141,6 +148,7 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
         registeredTopics.remove(topicName);
     }
 
+
     @Override
     public boolean topicExists(String topicName) {
         synchronized (registeredTopics) {
@@ -148,15 +156,34 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
         }
     }
 
+
     @Override
     public boolean producerExists(String producerId) {
         synchronized (registeredTopics) {
             for (TopicData topicData : registeredTopics.values()) {
-                if (topicData.producer().getClientId().equalsIgnoreCase(producerId))
+                if (topicData.getProducer().getClientId().equalsIgnoreCase(producerId))
                     return true;
             }
 
             return false;
+        }
+    }
+
+
+    @Override
+    public void addSubscriber(String topicName, ClientThread subscriber) {
+        synchronized (registeredTopics) {
+            for (Map.Entry<String, TopicData> entry : registeredTopics.entrySet()) {
+                if (!entry.getKey().equalsIgnoreCase(topicName))
+                    continue;
+
+                entry.getValue().getSubscribers().add(subscriber);
+
+                System.out.println("Added new subscriber: " + subscriber + " to: " + topicName);
+                entry.getValue().getSubscribers().forEach(System.out::println);
+
+                break;
+            }
         }
     }
 

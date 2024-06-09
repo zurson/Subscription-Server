@@ -1,5 +1,6 @@
 package org.example.interfaces;
 
+import org.example.client.ClientThread;
 import org.example.server.topics.TopicData;
 
 public interface TopicsDriver {
@@ -11,4 +12,6 @@ public interface TopicsDriver {
     boolean topicExists(String topicName);
 
     boolean producerExists(String producerId);
+
+    void addSubscriber(String topicName, ClientThread subscriber);
 }

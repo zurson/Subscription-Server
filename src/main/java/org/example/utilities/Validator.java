@@ -1,9 +1,20 @@
 package org.example.utilities;
 
+import javax.validation.ConstraintViolation;
+import javax.validation.Validation;
+import javax.validation.ValidatorFactory;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class Validator {
+
+    private final static ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
+
+
+    private Validator() {
+    }
+
 
     public static boolean isValidIPv4Address(String ip) {
         String ipv4Pattern = "^(([0-9]{1,2}|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]{1,2}|1[0-9]{2}|2[0-4][0-9]|25[0-5])$";
@@ -24,4 +35,12 @@ public class Validator {
         return timeout >= 1;
     }
 
+
+    public static <T> Set<ConstraintViolation<T>> validateJsonObject(T object) {
+        if (object == null)
+            return null;
+
+        javax.validation.Validator validator = factory.getValidator();
+        return validator.validate(object);
+    }
 }

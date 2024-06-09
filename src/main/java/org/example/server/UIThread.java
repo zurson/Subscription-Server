@@ -69,10 +69,10 @@ public class UIThread extends Thread {
         sb.append(headerAndFooter).append("\n");
 
         for (Map.Entry<String, TopicData> entry : topics.entrySet()) {
-            sb.append("Topic: ").append(entry.getKey()).append("\n");
-            sb.append("ProducerId: ").append(entry.getValue().producer().getClientId()).append("\n");
-            sb.append("Subscribers:");
-            addSubscribers(sb, entry.getValue().subscribers());
+            sb.append("\nTopic: ").append(entry.getKey()).append("\n");
+            sb.append("ProducerId: ").append(entry.getValue().getProducer().getClientId()).append("\n");
+            sb.append("Subscribers: ").append("\n");
+            addSubscribers(sb, entry.getValue().getSubscribers());
         }
 
         sb.append(headerAndFooter);

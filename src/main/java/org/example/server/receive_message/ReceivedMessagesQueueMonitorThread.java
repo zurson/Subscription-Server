@@ -8,13 +8,12 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.example.client.ClientThread;
 import org.example.interfaces.MessagesQueueDriver;
 import org.example.interfaces.TopicsDriver;
+import org.example.server.topics.TopicData;
+import org.example.utilities.Validator;
 
 import javax.validation.ConstraintViolation;
-import javax.validation.Validation;
-import javax.validation.Validator;
-import javax.validation.ValidatorFactory;
-import java.io.IOException;
 import java.util.Collections;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.example.settings.Settings.QUEUE_CHECK_INTERVAL_MS;
@@ -65,9 +64,23 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
             return;
         }
 
-        client.setClientId(message.getSenderId());
-        messagesQueueDriver.addMessageToSendQueue("OKEJ", Collections.singletonList(client));
+        Optional<String> errorMessage;
 
+        switch (message.getType()) {
+            case "register":
+                errorMessage = register(client, message);
+                break;
+
+            default:
+                errorMessage = Optional.of("Unexpected error");
+        }
+
+        if (errorMessage.isEmpty()) {
+            client.setClientId(message.getSenderId());
+            errorMessage = Optional.of("SUCCESS");
+        }
+
+        messagesQueueDriver.addMessageToSendQueue(errorMessage.get(), Collections.singletonList(client));
     }
 
 
@@ -76,17 +89,13 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
             return null;
         }
 
-        try (ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
+        try {
             String modifiedJson = insertTypeToPayload(receivedMessage);
             Message message = mapper.readValue(modifiedJson, Message.class);
 
-            Validator validator = factory.getValidator();
-            Set<ConstraintViolation<Message>> violations = validator.validate(message);
-
-            if (!violations.isEmpty()) {
-                violations.forEach(violation -> System.out.println(violation.getMessage()));
+            Set<ConstraintViolation<Message>> violations = Validator.validateJsonObject(message);
+            if (violations == null || !violations.isEmpty())
                 return null;
-            }
 
             return message;
         } catch (JsonProcessingException e) {
@@ -106,10 +115,43 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
 
 
 
-    /* TYPES */
+    /* REGISTER */
 
-    private void register(Message message) {
+    private Optional<String> register(ClientThread producer, Message message) {
+        RegisterPayload payload = (RegisterPayload) message.getPayload();
 
+        if (payload == null)
+            return Optional.of("Payload is null");
+
+        Set<ConstraintViolation<RegisterPayload>> payloadViolations = Validator.validateJsonObject(payload);
+        if (!payloadViolations.isEmpty())
+            return Optional.of("Payload validation error");
+
+        return switch (payload.getRegisterAction()) {
+            case CREATE -> registerTopic(producer, message);
+            case SUBSCRIBE -> addSubscription(producer, message);
+        };
+
+
+    }
+
+
+    private Optional<String> registerTopic(ClientThread producer, Message message) {
+        if (topicsDriver.topicExists(message.getTopic())) return Optional.of("Topic already exists");
+
+        if (topicsDriver.producerExists(message.getSenderId()))
+            return Optional.of("Producer with given ID already exists");
+
+        topicsDriver.addTopic(message.getTopic(), new TopicData(producer));
+        return Optional.empty();
+    }
+
+
+    private Optional<String> addSubscription(ClientThread subscriber, Message message) {
+        if (!topicsDriver.topicExists(message.getTopic())) return Optional.of("Topic does not exists");
+
+        topicsDriver.addSubscriber(message.getTopic(), subscriber);
+        return Optional.empty();
     }
 
 }

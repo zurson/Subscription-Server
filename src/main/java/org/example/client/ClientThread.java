@@ -95,6 +95,17 @@ public class ClientThread extends Thread {
             e.printStackTrace();
         } finally {
             clientsListDriver.removeClient(this);
+            closeStreams();
+        }
+    }
+
+
+    private void closeStreams() {
+        try {
+            inputStream.close();
+            outputStream.close();
+        } catch (IOException ignored) {
+
         }
     }
 
@@ -105,5 +116,10 @@ public class ClientThread extends Thread {
 
     public synchronized void setClientId(String clientId) {
         this.clientId = clientId;
+    }
+
+    @Override
+    public String toString() {
+        return clientId;
     }
 }

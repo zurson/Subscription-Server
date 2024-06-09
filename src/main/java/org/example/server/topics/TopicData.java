@@ -1,10 +1,19 @@
 package org.example.server.topics;
 
+import lombok.Data;
 import org.example.client.ClientThread;
 
-import java.net.Socket;
+import java.util.HashSet;
 import java.util.Set;
 
-public record TopicData(ClientThread producer, Set<ClientThread> subscribers) {
+@Data
+public class TopicData {
+    private final ClientThread producer;
+    private final Set<ClientThread> subscribers;
+
+    public TopicData(ClientThread producer) {
+        this.producer = producer;
+        this.subscribers = new HashSet<>();
+    }
 
 }

@@ -13,4 +13,9 @@ public class Settings {
     /* RECEIVED MESSAGES QUEUE MONITOR */
     public static final int QUEUE_CHECK_INTERVAL_MS = 1;
 
+
+    /* REGISTER */
+    public static final String REGISTER_ACTION_SUBSCRIBE = "subscribe";
+    public static final String REGISTER_ACTION_CREATE = "create";
+
 }
