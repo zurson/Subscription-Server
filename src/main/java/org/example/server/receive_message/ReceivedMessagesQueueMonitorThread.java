@@ -148,9 +148,6 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
     private Optional<String> registerTopic(ClientThread producer, Message message) {
         if (topicsDriver.topicExists(message.getTopic())) return Optional.of("Topic already exists");
 
-        if (topicsDriver.producerExists(message.getSenderId()))
-            return Optional.of("Producer with given ID already exists");
-
         topicsDriver.addTopic(message.getTopic(), new TopicData(producer));
         return Optional.empty();
     }
