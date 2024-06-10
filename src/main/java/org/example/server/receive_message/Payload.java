@@ -3,6 +3,8 @@ package org.example.server.receive_message;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import lombok.Data;
+import org.example.server.receive_message.register.RegisterPayload;
+import org.example.server.receive_message.status.StatusPayload;
 
 @JsonTypeInfo(
         use = JsonTypeInfo.Id.NAME,

@@ -9,6 +9,8 @@ import org.example.client.ClientThread;
 import org.example.interfaces.MessagesQueueDriver;
 import org.example.interfaces.ServerController;
 import org.example.interfaces.TopicsDriver;
+import org.example.server.receive_message.register.RegisterPayload;
+import org.example.server.receive_message.status.StatusPayload;
 import org.example.server.receive_message.status.StatusResponse;
 import org.example.server.receive_message.status.StatusResponseBuilder;
 import org.example.server.topics.TopicData;
@@ -16,7 +18,6 @@ import org.example.utilities.Validator;
 
 import javax.validation.ConstraintViolation;
 import java.util.Collections;
-import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
