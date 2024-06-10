@@ -7,12 +7,16 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.example.client.ClientThread;
 import org.example.interfaces.MessagesQueueDriver;
+import org.example.interfaces.ServerController;
 import org.example.interfaces.TopicsDriver;
+import org.example.server.receive_message.status.StatusResponse;
+import org.example.server.receive_message.status.StatusResponseBuilder;
 import org.example.server.topics.TopicData;
 import org.example.utilities.Validator;
 
 import javax.validation.ConstraintViolation;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -23,10 +27,12 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
     private final ObjectMapper mapper;
     private final MessagesQueueDriver messagesQueueDriver;
     private final TopicsDriver topicsDriver;
+    private final ServerController serverController;
 
-    public ReceivedMessagesQueueMonitorThread(MessagesQueueDriver messagesQueueDriver, TopicsDriver topicsDriver) {
+    public ReceivedMessagesQueueMonitorThread(MessagesQueueDriver messagesQueueDriver, TopicsDriver topicsDriver, ServerController serverController) {
         this.messagesQueueDriver = messagesQueueDriver;
         this.topicsDriver = topicsDriver;
+        this.serverController = serverController;
 
         this.mapper = new ObjectMapper();
         this.mapper.registerModule(new JavaTimeModule());
@@ -69,23 +75,23 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
             return;
         }
 
-        Optional<String> errorMessage;
+        String responseMessage;
 
         switch (message.getType()) {
             case "register":
-                errorMessage = register(client, message);
+                responseMessage = register(client, message);
+                break;
+
+            case "status":
+                responseMessage = status(message);
                 break;
 
             default:
-                errorMessage = Optional.of("Unexpected error");
+                responseMessage = "Unexpected error";
         }
 
-        if (errorMessage.isEmpty()) {
-            client.setClientId(message.getSenderId());
-            errorMessage = Optional.of("SUCCESS");
-        }
-
-        messagesQueueDriver.addMessageToSendQueue(errorMessage.get(), Collections.singletonList(client));
+        client.setClientId(message.getSenderId());
+        messagesQueueDriver.addMessageToSendQueue(responseMessage, Collections.singletonList(client));
     }
 
 
@@ -128,36 +134,59 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
 
     /* REGISTER */
 
-    private Optional<String> register(ClientThread producer, Message message) {
+
+    private String register(ClientThread producer, Message message) {
         RegisterPayload payload = (RegisterPayload) message.getPayload();
 
         Optional<String> errorMessage = Validator.validatePayload(payload, RegisterPayload.class);
         if (errorMessage.isPresent())
-            return errorMessage;
+            return errorMessage.get();
 
         return switch (message.getMode()) {
             case "producer" -> registerTopic(producer, message);
             case "subscriber" -> addSubscription(producer, message);
-            default -> Optional.of("Unexpected error");
+            default -> "Unexpected error";
         };
 
 
     }
 
 
-    private Optional<String> registerTopic(ClientThread producer, Message message) {
-        if (topicsDriver.topicExists(message.getTopic())) return Optional.of("Topic already exists");
+    private String registerTopic(ClientThread producer, Message message) {
+        if (topicsDriver.topicExists(message.getTopic()))
+            return "Topic already exists";
 
         topicsDriver.addTopic(message.getTopic(), new TopicData(producer));
-        return Optional.empty();
+        return "Successfully registered topic: " + message.getTopic();
     }
 
 
-    private Optional<String> addSubscription(ClientThread subscriber, Message message) {
-        if (!topicsDriver.topicExists(message.getTopic())) return Optional.of("Topic does not exists");
+    private String addSubscription(ClientThread subscriber, Message message) {
+        if (!topicsDriver.topicExists(message.getTopic()))
+            return "Topic does not exists";
 
         topicsDriver.addSubscriber(message.getTopic(), subscriber);
-        return Optional.empty();
+        return "Successfully subscribed topic: " + message.getTopic();
     }
 
+
+    /* STATUS */
+
+
+    private String status(Message message) {
+        StatusPayload payload = (StatusPayload) message.getPayload();
+
+        Optional<String> errorMessage = Validator.validatePayload(payload, StatusPayload.class);
+        if (errorMessage.isPresent())
+            return errorMessage.get();
+
+        try {
+            StatusResponse statusResponse = new StatusResponseBuilder().build(serverController.getTopics());
+            return mapper.writeValueAsString(statusResponse);
+        } catch (JsonProcessingException e) {
+            e.printStackTrace();
+            return "Unexpected error";
+        }
+
+    }
 }

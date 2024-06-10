@@ -40,7 +40,7 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
         this.config = new ConfigLoader().loadConfig();
 
         this.communicationThread = new CommunicationThread(this, this, hostname, port, timeout);
-        this.receivedMessagesQueueMonitorThread = new ReceivedMessagesQueueMonitorThread(this, this);
+        this.receivedMessagesQueueMonitorThread = new ReceivedMessagesQueueMonitorThread(this, this, this);
         this.uiThread = new UIThread(this);
 
         this.clientList = Collections.synchronizedSet(new HashSet<>());
@@ -193,6 +193,16 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
 
     @Override
     public Map<String, TopicData> getTopics() {
-        return new HashMap<>(registeredTopics);
+        synchronized (registeredTopics) {
+            HashMap<String, TopicData> topicsCopy = new HashMap<>();
+
+            for (Map.Entry<String, TopicData> entry : registeredTopics.entrySet()) {
+                String title = entry.getKey();
+                TopicData topicData = new TopicData(entry.getValue().getProducer(), entry.getValue().getSubscribers());
+                topicsCopy.put(title, topicData);
+            }
+
+            return topicsCopy;
+        }
     }
 }

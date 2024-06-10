@@ -5,7 +5,7 @@ import lombok.EqualsAndHashCode;
 
 @EqualsAndHashCode(callSuper = true)
 @Data
-public class RegisterPayload extends Payload {
+public class StatusPayload extends Payload {
 
 
 }

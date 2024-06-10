@@ -16,4 +16,9 @@ public class TopicData {
         this.subscribers = new HashSet<>();
     }
 
+    public TopicData(ClientThread producer, Set<ClientThread> subscribers) {
+        this.producer = producer;
+        this.subscribers = subscribers;
+    }
+
 }

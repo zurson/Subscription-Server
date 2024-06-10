@@ -10,7 +10,8 @@ import lombok.Data;
         property = "type"
 )
 @JsonSubTypes({
-        @JsonSubTypes.Type(value = RegisterPayload.class, name = "register")
+        @JsonSubTypes.Type(value = RegisterPayload.class, name = "register"),
+        @JsonSubTypes.Type(value = StatusPayload.class, name = "status")
 })
 @Data
 public abstract class Payload {
