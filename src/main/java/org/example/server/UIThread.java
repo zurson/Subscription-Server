@@ -4,6 +4,7 @@ import org.example.client.ClientThread;
 import org.example.interfaces.ServerController;
 import org.example.server.topics.TopicData;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.Set;
@@ -39,15 +40,23 @@ public class UIThread extends Thread {
 
 
     private boolean processCommand(String command) {
-        switch (command) {
-            case "info":
+        return switch (command) {
+            case "info" -> {
                 showSeverInfo();
-                return true;
+                yield true;
+            }
 
-            default:
-                return false;
-        }
+            case "connections" -> {
+                showConnections();
+                yield true;
+            }
+
+            default -> false;
+        };
     }
+
+
+    /* INFO */
 
 
     private void showSeverInfo() {
@@ -85,5 +94,20 @@ public class UIThread extends Thread {
             sb.append("\t- ").append(subscriber.getClientId()).append("\n");
     }
 
+
+    /* CONNECTIONS */
+
+
+    private void showConnections() {
+        StringBuilder sb = new StringBuilder();
+        List<ClientThread> connectedClients = serverController.getConnectedClients();
+
+        String headerAndFooter = "---------- [CONNECTIONS] ----------";
+        sb.append(headerAndFooter).append("\n");
+        sb.append(connectedClients).append("\n");
+        sb.append(headerAndFooter);
+
+        System.out.println(sb);
+    }
 
 }
