@@ -173,17 +173,9 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
     @Override
     public void addSubscriber(String topicName, ClientThread subscriber) {
         synchronized (registeredTopics) {
-            for (Map.Entry<String, TopicData> entry : registeredTopics.entrySet()) {
-                if (!entry.getKey().equalsIgnoreCase(topicName))
-                    continue;
-
-                entry.getValue().getSubscribers().add(subscriber);
-
-                System.out.println("\nAdded new subscriber: " + subscriber + " to: " + topicName);
-                entry.getValue().getSubscribers().forEach(System.out::println);
-
-                break;
-            }
+            TopicData topicData = getTopic(topicName);
+            topicData.getSubscribers().add(subscriber);
+            System.out.println("\nAdded new subscriber: " + subscriber + " to: " + topicName);
         }
     }
 
@@ -213,5 +205,16 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
 
             return topicsCopy;
         }
+    }
+
+
+    @Override
+    public Object getTopicSynchronizer() {
+        return registeredTopics;
+    }
+
+    @Override
+    public List<ClientThread> getConnectedClients() {
+        return new ArrayList<>(clientList);
     }
 }

@@ -6,6 +6,7 @@ import lombok.Data;
 import org.example.server.receive_message.message.MessagePayload;
 import org.example.server.receive_message.register.RegisterPayload;
 import org.example.server.receive_message.status.StatusPayload;
+import org.example.server.receive_message.withdraw.WithdrawPayload;
 
 import javax.validation.constraints.NotBlank;
 
@@ -17,7 +18,8 @@ import javax.validation.constraints.NotBlank;
 @JsonSubTypes({
         @JsonSubTypes.Type(value = RegisterPayload.class, name = "register"),
         @JsonSubTypes.Type(value = StatusPayload.class, name = "status"),
-        @JsonSubTypes.Type(value =  MessagePayload.class, name = "message")
+        @JsonSubTypes.Type(value =  MessagePayload.class, name = "message"),
+        @JsonSubTypes.Type(value =  WithdrawPayload.class, name = "withdraw")
 })
 @Data
 public abstract class Payload {

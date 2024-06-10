@@ -1,6 +1,5 @@
 package org.example.client;
 
-import lombok.EqualsAndHashCode;
 import org.example.interfaces.ClientsListDriver;
 import org.example.interfaces.ReceiveDriver;
 import org.example.server.receive_message.ReceivedMessage;
@@ -14,7 +13,7 @@ import java.nio.charset.StandardCharsets;
 import static org.example.settings.Settings.CLIENT_NOT_CONNECTED_MSG;
 import static org.example.settings.Settings.MAX_TRANSFER_BYTES;
 
-@EqualsAndHashCode(callSuper = true)
+
 public class ClientThread extends Thread {
 
     private final Socket clientSocket;
@@ -46,7 +45,7 @@ public class ClientThread extends Thread {
                 String recvMessage = recvMessage();
                 receiveDriver.addNewMessage(new ReceivedMessage(recvMessage, this));
             } catch (IOException e) {
-                System.out.println("Client " + clientSocket.getRemoteSocketAddress() + " disconnected");
+                System.out.println("Client " + clientSocket.getRemoteSocketAddress() + " disconnected (" + clientId + ")");
                 disconnect();
                 break;
             }
@@ -87,7 +86,7 @@ public class ClientThread extends Thread {
     }
 
 
-    public void disconnect() {
+    public synchronized void disconnect() {
         if (clientSocket == null)
             return;
 
@@ -96,6 +95,7 @@ public class ClientThread extends Thread {
         } catch (IOException e) {
             e.printStackTrace();
         } finally {
+            System.err.println("Removing client: " + clientId);
             clientsListDriver.removeClient(this);
             closeStreams();
         }
@@ -116,9 +116,11 @@ public class ClientThread extends Thread {
         return clientId;
     }
 
+
     public synchronized void setClientId(String clientId) {
         this.clientId = clientId;
     }
+
 
     @Override
     public String toString() {
