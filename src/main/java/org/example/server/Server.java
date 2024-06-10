@@ -137,7 +137,7 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
         synchronized (registeredTopics) {
             System.out.println("Added new topic: " + topicName);
             for (Map.Entry<String, TopicData> entry : registeredTopics.entrySet()) {
-                System.out.print(entry.getKey() + ": " + entry.getValue().getSubscribers());
+                System.out.print(entry.getKey() + ": " + entry.getValue().getSubscribers() + "\n");
             }
         }
     }
@@ -179,7 +179,7 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
 
                 entry.getValue().getSubscribers().add(subscriber);
 
-                System.out.println("Added new subscriber: " + subscriber + " to: " + topicName);
+                System.out.println("\nAdded new subscriber: " + subscriber + " to: " + topicName);
                 entry.getValue().getSubscribers().forEach(System.out::println);
 
                 break;

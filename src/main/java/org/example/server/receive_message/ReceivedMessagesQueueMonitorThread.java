@@ -64,6 +64,11 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
             return;
         }
 
+        if (changingExistingId(client, message)) {
+            messagesQueueDriver.addMessageToSendQueue("Cannot to change client id", Collections.singletonList(client));
+            return;
+        }
+
         Optional<String> errorMessage;
 
         switch (message.getType()) {
@@ -114,22 +119,26 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
     }
 
 
+    private boolean changingExistingId(ClientThread client, Message message) {
+        String currentClientId = client.getClientId();
+        String clientIdFromMessage = message.getSenderId();
+        return currentClientId != null && !clientIdFromMessage.equals(currentClientId);
+    }
+
 
     /* REGISTER */
 
     private Optional<String> register(ClientThread producer, Message message) {
         RegisterPayload payload = (RegisterPayload) message.getPayload();
 
-        if (payload == null)
-            return Optional.of("Payload is null");
+        Optional<String> errorMessage = Validator.validatePayload(payload, RegisterPayload.class);
+        if (errorMessage.isPresent())
+            return errorMessage;
 
-        Set<ConstraintViolation<RegisterPayload>> payloadViolations = Validator.validateJsonObject(payload);
-        if (!payloadViolations.isEmpty())
-            return Optional.of("Payload validation error");
-
-        return switch (payload.getRegisterAction()) {
-            case CREATE -> registerTopic(producer, message);
-            case SUBSCRIBE -> addSubscription(producer, message);
+        return switch (message.getMode()) {
+            case "producer" -> registerTopic(producer, message);
+            case "subscriber" -> addSubscription(producer, message);
+            default -> Optional.of("Unexpected error");
         };
 
 
