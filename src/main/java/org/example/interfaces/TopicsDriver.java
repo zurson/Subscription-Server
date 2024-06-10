@@ -14,4 +14,7 @@ public interface TopicsDriver {
     boolean producerExists(String producerId);
 
     void addSubscriber(String topicName, ClientThread subscriber);
+
+    TopicData getTopic(String topicName);
+
 }

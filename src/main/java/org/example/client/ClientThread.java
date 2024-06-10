@@ -1,5 +1,6 @@
 package org.example.client;
 
+import lombok.EqualsAndHashCode;
 import org.example.interfaces.ClientsListDriver;
 import org.example.interfaces.ReceiveDriver;
 import org.example.server.receive_message.ReceivedMessage;
@@ -13,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import static org.example.settings.Settings.CLIENT_NOT_CONNECTED_MSG;
 import static org.example.settings.Settings.MAX_TRANSFER_BYTES;
 
+@EqualsAndHashCode(callSuper = true)
 public class ClientThread extends Thread {
 
     private final Socket clientSocket;

@@ -9,6 +9,8 @@ import org.example.client.ClientThread;
 import org.example.interfaces.MessagesQueueDriver;
 import org.example.interfaces.ServerController;
 import org.example.interfaces.TopicsDriver;
+import org.example.server.receive_message.message.MessagePayload;
+import org.example.server.receive_message.message.MessageResponse;
 import org.example.server.receive_message.register.RegisterPayload;
 import org.example.server.receive_message.status.StatusPayload;
 import org.example.server.receive_message.status.StatusResponse;
@@ -17,9 +19,7 @@ import org.example.server.topics.TopicData;
 import org.example.utilities.Validator;
 
 import javax.validation.ConstraintViolation;
-import java.util.Collections;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 
 import static org.example.settings.Settings.QUEUE_CHECK_INTERVAL_MS;
 
@@ -76,15 +76,32 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
             return;
         }
 
+        if (!isPermitted(message.getSenderId(), client)) {
+            messagesQueueDriver.addMessageToSendQueue("Given ID is busy", Collections.singletonList(client));
+            client.disconnect();
+            return;
+        }
+
+        // TODO: kiedy wysyłamy żądanie, sprawdzamy czy jesteśmy uprawnieni
+
         String responseMessage;
+        List<ClientThread> recipients = new ArrayList<>();
 
         switch (message.getType()) {
             case "register":
                 responseMessage = register(client, message);
+                recipients.add(client);
                 break;
 
             case "status":
                 responseMessage = status(message);
+                recipients.add(client);
+                break;
+
+            case "message":
+                MessageResponse response = message(client, message);
+                responseMessage = response.getContent();
+                recipients = response.getRecipients();
                 break;
 
             default:
@@ -92,7 +109,7 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
         }
 
         client.setClientId(message.getSenderId());
-        messagesQueueDriver.addMessageToSendQueue(responseMessage, Collections.singletonList(client));
+        messagesQueueDriver.addMessageToSendQueue(responseMessage, recipients);
     }
 
 
@@ -126,10 +143,37 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
     }
 
 
+    private String removeTypeFromPayload(String receivedMessage) throws JsonProcessingException {
+        JsonNode rootNode = mapper.readTree(receivedMessage);
+        String type = rootNode.path("type").asText();
+        ((ObjectNode) rootNode.path("payload")).remove("type");
+        return mapper.writeValueAsString(rootNode);
+    }
+
+
     private boolean changingExistingId(ClientThread client, Message message) {
         String currentClientId = client.getClientId();
         String clientIdFromMessage = message.getSenderId();
         return currentClientId != null && !clientIdFromMessage.equals(currentClientId);
+    }
+
+
+    private boolean isTopicProducer(ClientThread client, String topicName) {
+        TopicData topicData = topicsDriver.getTopic(topicName);
+        return client.equals(topicData.getProducer());
+    }
+
+
+    private boolean isPermitted(String clientId, ClientThread client) {
+        Map<String, TopicData> topics = serverController.getTopics();
+
+        for (TopicData topicData : topics.values()) {
+            ClientThread producer = topicData.getProducer();
+            if (producer.getClientId().equals(clientId) && !producer.equals(client))
+                return false;
+        }
+
+        return true;
     }
 
 
@@ -190,4 +234,53 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
         }
 
     }
+
+
+    /* MESSAGE */
+
+
+    private MessageResponse message(ClientThread client, Message message) {
+        Optional<String> validationError = validateMessage(client, message);
+
+        if (validationError.isPresent())
+            return new MessageResponse(validationError.get(), Collections.singletonList(client));
+
+        try {
+            TopicData topicData = topicsDriver.getTopic(message.getTopic());
+            String content = mapper.writeValueAsString(message);
+            content = removeTypeFromPayload(content);
+
+            System.out.println("\nSending: " + content);
+            System.out.println("To: " + topicData.getSubscribers());
+
+            List<ClientThread> recipients = new ArrayList<>(topicData.getSubscribers());
+            recipients.add(client);
+
+            return new MessageResponse(content, recipients);
+        } catch (JsonProcessingException e) {
+            e.printStackTrace();
+            return new MessageResponse("Unexpected error", Collections.singletonList(client));
+        }
+    }
+
+
+    private Optional<String> validateMessage(ClientThread client, Message message) {
+        MessagePayload payload = (MessagePayload) message.getPayload();
+
+        Optional<String> errorMessage = Validator.validatePayload(payload, MessagePayload.class);
+        if (errorMessage.isPresent())
+            return errorMessage;
+
+        String topic = message.getTopic();
+
+        if (!topicsDriver.topicExists(topic))
+            return Optional.of("Topic does not exists");
+
+        if (!isTopicProducer(client, topic))
+            return Optional.of("You are not this topic producer");
+
+        return Optional.empty();
+    }
+
+
 }

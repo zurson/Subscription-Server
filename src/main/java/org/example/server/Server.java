@@ -188,6 +188,15 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
     }
 
 
+    @Override
+    public TopicData getTopic(String topicName) {
+        synchronized (registeredTopics) {
+            TopicData topicData = registeredTopics.get(topicName);
+            return new TopicData(topicData.getProducer(), topicData.getSubscribers());
+        }
+    }
+
+
     /* ServerController */
 
 
