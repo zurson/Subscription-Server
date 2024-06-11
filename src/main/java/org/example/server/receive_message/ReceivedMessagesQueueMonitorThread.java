@@ -361,14 +361,23 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
         if (!topicsDriver.topicExists(topicName))
             return createFeedbackPayload(false, "Topic does not exists");
 
-        if (topicsDriver.isTopicProducer(client, topicName)) {
-            topicsDriver.unregisterTopic(topicName);
-            return createFeedbackPayload(true, "Successfully unregistered topic: " + topicName);
-        }
 
-        if (topicsDriver.isTopicSubscriber(client, topicName)) {
-            topicsDriver.unregisterSubscription(topicName, client);
-            return createFeedbackPayload(true, "Successfully unsubscribed topic: " + topicName);
+        switch (message.getMode()) {
+            case "producer":
+                if (topicsDriver.isTopicProducer(client, topicName)) {
+                    System.out.println("PRODUCER");
+                    topicsDriver.unregisterTopic(topicName);
+                    return createFeedbackPayload(true, "Successfully unregistered topic: " + topicName);
+                }
+                break;
+
+            case "subscriber":
+                if (topicsDriver.isTopicSubscriber(client, topicName)) {
+                    System.out.println("SUIBER");
+                    topicsDriver.unregisterSubscription(topicName, client);
+                    return createFeedbackPayload(true, "Successfully unsubscribed topic: " + topicName);
+                }
+                break;
         }
 
         return createFeedbackPayload(false, "You have nothing in common with given topic");

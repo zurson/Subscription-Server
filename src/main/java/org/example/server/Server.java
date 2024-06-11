@@ -234,7 +234,7 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
         TopicData topicData = getTopic(topicName);
         topicData.getSubscribers().remove(client);
 
-        if (!isSubscriberOrProducer(topicName, client))
+        if (!isSubscriberOrProducer(null, client))
             client.disconnect();
     }
 
