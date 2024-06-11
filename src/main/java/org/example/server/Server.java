@@ -72,7 +72,7 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
                 try {
                     clientThread.sendMessage(notification.content());
                 } catch (IOException e) {
-                    e.printStackTrace();
+                    System.err.println("Error sending message to " + clientThread);
                     clientThread.disconnect();
                 }
             }
