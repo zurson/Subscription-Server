@@ -15,6 +15,7 @@ import org.example.server.receive_message.register.RegisterPayload;
 import org.example.server.receive_message.status.StatusPayload;
 import org.example.server.receive_message.status.StatusResponse;
 import org.example.server.receive_message.status.StatusResponseBuilder;
+import org.example.server.receive_message.withdraw.SubscriptionRemoveData;
 import org.example.server.receive_message.withdraw.WithdrawPayload;
 import org.example.server.topics.TopicData;
 import org.example.utilities.Validator;
@@ -63,63 +64,63 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
 
     private void manageMessage(ReceivedMessage receivedMessage) {
 //        synchronized (serverController.getTopicSynchronizer()) {
-            String content = receivedMessage.content();
-            ClientThread client = receivedMessage.client();
+        String content = receivedMessage.content();
+        ClientThread client = receivedMessage.client();
 
-            Message message = mapReceivedMessage(content);
+        Message message = mapReceivedMessage(content);
 
-            if (message == null) {
-                messagesQueueDriver.addMessageToSendQueue("Validation error", Collections.singletonList(client));
-                return;
-            }
+        if (message == null) {
+            addMessageToQueue("Validation error", client);
+            return;
+        }
 
-            if (changingExistingId(client, message)) {
-                messagesQueueDriver.addMessageToSendQueue("Cannot to change client id", Collections.singletonList(client));
-                return;
-            }
+        if (changingExistingId(client, message)) {
+            addMessageToQueue("Cannot to change client id", client);
+            return;
+        }
 
-            if (!isPermitted(message.getSenderId(), client)) {
-                messagesQueueDriver.addMessageToSendQueue("Given ID is busy", Collections.singletonList(client));
-                client.disconnect();
-                return;
-            }
+        if (!isPermitted(message.getSenderId(), client)) {
+            addMessageToQueue("Given ID is busy", client);
+            client.disconnect();
+            return;
+        }
 
-            String responseMessage;
-            List<ClientThread> recipients = new ArrayList<>();
+        String responseMessage;
+        List<ClientThread> recipients = new ArrayList<>();
 
-            switch (message.getType()) {
-                case "register":
-                    responseMessage = register(client, message);
-                    recipients.add(client);
-                    break;
+        switch (message.getType()) {
+            case "register":
+                responseMessage = register(client, message);
+                recipients.add(client);
+                break;
 
-                case "status":
-                    responseMessage = status(message);
-                    recipients.add(client);
-                    break;
+            case "status":
+                responseMessage = status(message);
+                recipients.add(client);
+                break;
 
-                case "message":
-                    MessageResponse response = message(client, message);
-                    responseMessage = response.getContent();
-                    recipients = response.getRecipients();
-                    break;
+            case "message":
+                MessageResponse response = message(client, message);
+                responseMessage = response.getContent();
+                recipients = response.getRecipients();
+                break;
 
-                case "withdraw":
-                    responseMessage = withdraw(client, message);
-                    recipients.add(client);
-                    break;
+            case "withdraw":
+                responseMessage = withdraw(client, message);
+                recipients.add(client);
+                break;
 
-                default:
-                    responseMessage = "Unexpected error";
-                    recipients.add(client);
-                    break;
-            }
+            default:
+                responseMessage = "Unexpected error";
+                recipients.add(client);
+                break;
+        }
 
-            if (recipients.isEmpty() || responseMessage == null)
-                return;
+        if (recipients.isEmpty() || responseMessage == null)
+            return;
 
-            client.setClientId(message.getSenderId());
-            messagesQueueDriver.addMessageToSendQueue(responseMessage, recipients);
+        client.setClientId(message.getSenderId());
+        addMessageToQueue(responseMessage, recipients);
 //        }
     }
 
@@ -215,6 +216,16 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
         }
 
         return false;
+    }
+
+
+    private void addMessageToQueue(String message, List<ClientThread> recipients) {
+        messagesQueueDriver.addMessageToSendQueue(message, recipients);
+    }
+
+
+    private void addMessageToQueue(String message, ClientThread recipient) {
+        addMessageToQueue(message, Collections.singletonList(recipient));
     }
 
 
@@ -348,7 +359,7 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
         }
 
         if (isTopicSubscriber(client, topicName)) {
-            unregisterSubscription(topicName, message.getSenderId());
+            unregisterSubscription(topicName, client);
             return null;
         }
 
@@ -359,31 +370,66 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
     private void unregisterTopic(String topicName) {
         TopicData topicData = topicsDriver.getTopic(topicName);
 
-        for (ClientThread subscriber : topicData.getSubscribers()) {
-            if (isSubscriberOrProducer(topicName, subscriber)) {
-                messagesQueueDriver.addMessageToSendQueue("Subscribed topic has been removed: " + topicName, Collections.singletonList(subscriber));
-                continue;
-            }
+        // Subscribers
+        SubscriptionRemoveData subscriptionRemoveData = removeSubscribers(topicData, topicName);
+        notifyAboutSubscriptionRemove(subscriptionRemoveData);
+        disconnectClients(subscriptionRemoveData.getClientsToDisconnect());
 
-            messagesQueueDriver.addMessageToSendQueue("Subscribed topic has been removed: " + topicName + " (DISCONNECTED)", Collections.singletonList(subscriber));
-            subscriber.disconnect();
-        }
-
+        // Producer
         ClientThread producer = topicData.getProducer();
+        addMessageToQueue("Your topic has been unregistered: " + topicName, producer);
 
-        if (isSubscriberOrProducer(topicName, producer)) {
-            messagesQueueDriver.addMessageToSendQueue("Your topic has been unregistered: " + topicName, Collections.singletonList(producer));
-            return;
-        }
-
-        messagesQueueDriver.addMessageToSendQueue("Your topic has been unregistered: " + topicName + " (DISCONNECTED)", Collections.singletonList(producer));
-        producer.disconnect();
+        if (!isSubscriberOrProducer(topicName, producer))
+            producer.disconnect();
 
         topicsDriver.removeTopic(topicName);
     }
 
-    private void unregisterSubscription(String topicName, String clientId) {
 
+    private void unregisterSubscription(String topicName, ClientThread client) {
+        TopicData topicData = topicsDriver.getTopic(topicName);
+        boolean status = topicData.getSubscribers().remove(client);
+
+        if (status)
+            addMessageToQueue("Unsubscribed: " + topicName, client);
+        else
+            addMessageToQueue("Unable to remove subscription", client);
+
+        if (!isSubscriberOrProducer(topicName, client))
+            client.disconnect();
     }
+
+
+    private SubscriptionRemoveData removeSubscribers(TopicData topicData, String topicName) {
+        SubscriptionRemoveData removeData = new SubscriptionRemoveData(topicName);
+
+        for (ClientThread subscriber : topicData.getSubscribers()) {
+            if (isSubscriberOrProducer(topicName, subscriber)) {
+                removeData.addClientToNotify(subscriber);
+                continue;
+            }
+
+            removeData.addClientToDisconnect(subscriber);
+        }
+
+        return removeData;
+    }
+
+
+    private void notifyAboutSubscriptionRemove(SubscriptionRemoveData subscriptionRemoveData) {
+        String topicName = subscriptionRemoveData.getTopicName();
+
+        List<ClientThread> recipients = new ArrayList<>();
+        recipients.addAll(subscriptionRemoveData.getClientsToNotify());
+        recipients.addAll(subscriptionRemoveData.getClientsToDisconnect());
+
+        addMessageToQueue("Topic you subscribed has been removed: " + topicName, recipients);
+    }
+
+
+    private void disconnectClients(List<ClientThread> clients) {
+        clients.forEach(ClientThread::disconnect);
+    }
+
 
 }
