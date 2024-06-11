@@ -15,7 +15,7 @@ public class StatusResponseBuilder {
     }
 
 
-    public StatusResponse build(Map<String, TopicData> topics) {
+    public StatusResponsePayload build(Map<String, TopicData> topics) {
         List<TopicStatus> topicStatusResponse = new ArrayList<>();
 
         for (Map.Entry<String, TopicData> entry : topics.entrySet()) {
@@ -24,7 +24,7 @@ public class StatusResponseBuilder {
             topicStatusResponse.add(new TopicStatus(topic, subscribers));
         }
 
-        return new StatusResponse(topicStatusResponse);
+        return new StatusResponsePayload(topicStatusResponse);
     }
 
 }

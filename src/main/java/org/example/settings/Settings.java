@@ -3,7 +3,7 @@ package org.example.settings;
 public class Settings {
 
     /* GLOBAL */
-    public static final int MAX_TRANSFER_BYTES = 4096;
+    public static final int MAX_TRANSFER_BYTES = 200000;
 
 
     /* CLIENT */

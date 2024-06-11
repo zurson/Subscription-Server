@@ -13,14 +13,15 @@ import org.example.server.receive_message.message.MessagePayload;
 import org.example.server.receive_message.message.MessageResponse;
 import org.example.server.receive_message.register.RegisterPayload;
 import org.example.server.receive_message.status.StatusPayload;
-import org.example.server.receive_message.status.StatusResponse;
 import org.example.server.receive_message.status.StatusResponseBuilder;
+import org.example.server.receive_message.status.StatusResponsePayload;
 import org.example.server.receive_message.withdraw.SubscriptionRemoveData;
 import org.example.server.receive_message.withdraw.WithdrawPayload;
 import org.example.server.topics.TopicData;
 import org.example.utilities.Validator;
 
 import javax.validation.ConstraintViolation;
+import java.io.IOException;
 import java.util.*;
 
 import static org.example.settings.Settings.QUEUE_CHECK_INTERVAL_MS;
@@ -70,65 +71,79 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
         Message message = mapReceivedMessage(content);
 
         if (message == null) {
-            addMessageToQueue("Validation error", client);
+            System.err.println("VALIDATION ERROR: " + receivedMessage.content());
             return;
         }
 
         if (changingExistingId(client, message)) {
-            addMessageToQueue("Cannot to change client id", client);
+            addErrorMessageToQueue(message, "Cannot to change client id", client);
             return;
         }
 
         if (!isPermitted(message.getSenderId(), client)) {
-            addMessageToQueue("Given ID is busy", client);
+            addErrorMessageToQueue(message, "Given ID is busy", client);
+            ;
             client.disconnect();
             return;
         }
 
-        String responseMessage;
+        Payload payload;
         List<ClientThread> recipients = new ArrayList<>();
 
         switch (message.getType()) {
             case "register":
-                responseMessage = register(client, message);
+                payload = register(client, message);
                 recipients.add(client);
                 break;
 
             case "status":
-                responseMessage = status(message);
+                payload = status(message);
                 recipients.add(client);
                 break;
 
             case "message":
                 MessageResponse response = message(client, message);
-                responseMessage = response.getContent();
+
+                System.out.println("\nSending: " + response.getContent());
+                System.out.println("To: " + response.getRecipients());
+
+                payload = createFeedbackPayload(response.isSuccess(), response.getContent());
                 recipients = response.getRecipients();
                 break;
 
             case "withdraw":
-                responseMessage = withdraw(client, message);
+                payload = withdraw(client, message);
                 recipients.add(client);
                 break;
 
             default:
-                responseMessage = "Unexpected error";
+                payload = createFeedbackPayload(false, "Unexpected error");
                 recipients.add(client);
                 break;
         }
 
-        if (recipients.isEmpty() || responseMessage == null)
+        if (recipients.isEmpty() || payload == null)
             return;
 
-        client.setClientId(message.getSenderId());
-        addMessageToQueue(responseMessage, recipients);
+        try {
+            client.setClientId(message.getSenderId());
+
+            message.setPayload(payload);
+            String mappedFeedback = mapper.writeValueAsString(message);
+
+            addMessageToQueue(mappedFeedback, recipients);
+        } catch (JsonProcessingException e) {
+            e.printStackTrace();
+            System.err.println("Map error");
+        }
+
 //        }
     }
 
 
     private Message mapReceivedMessage(String receivedMessage) {
-        if (receivedMessage == null || receivedMessage.isEmpty()) {
+        if (receivedMessage == null || receivedMessage.isEmpty())
             return null;
-        }
 
         try {
             String modifiedJson = insertTypeToPayload(receivedMessage);
@@ -162,30 +177,19 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
     }
 
 
+    private String removeFieldFromJson(String json, String fieldName) throws IOException {
+        JsonNode jsonNode = mapper.readTree(json);
+        if (jsonNode instanceof ObjectNode) {
+            ((ObjectNode) jsonNode).remove(fieldName);
+        }
+        return mapper.writeValueAsString(jsonNode);
+    }
+
+
     private boolean changingExistingId(ClientThread client, Message message) {
         String currentClientId = client.getClientId();
         String clientIdFromMessage = message.getSenderId();
         return currentClientId != null && !clientIdFromMessage.equals(currentClientId);
-    }
-
-
-    private boolean isTopicProducer(ClientThread client, String topicName) {
-        TopicData topicData = topicsDriver.getTopic(topicName);
-
-        if (topicData == null)
-            return false;
-
-        return client.equals(topicData.getProducer());
-    }
-
-
-    private boolean isTopicSubscriber(ClientThread client, String topicName) {
-        TopicData topicData = topicsDriver.getTopic(topicName);
-
-        if (topicData == null)
-            return false;
-
-        return topicData.getSubscribers().contains(client);
     }
 
 
@@ -202,20 +206,16 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
     }
 
 
-    private boolean isSubscriberOrProducer(String topicNameToSkip, ClientThread client) {
-        Map<String, TopicData> topics = serverController.getTopics();
+    private void addErrorMessageToQueue(Message message, String error, ClientThread recipient) {
+        if (message == null)
+            return;
 
-        for (Map.Entry<String, TopicData> entry : topics.entrySet()) {
-            if (entry.getKey().equals(topicNameToSkip))
-                continue;
-
-            TopicData topicData = entry.getValue();
-            if (client.equals(topicData.getProducer()) || topicData.getSubscribers().contains(client))
-                return true;
-
+        try {
+            message.setPayload(createFeedbackPayload(false, error));
+            addMessageToQueue(mapper.writeValueAsString(message), recipient);
+        } catch (JsonProcessingException e) {
+            e.printStackTrace();
         }
-
-        return false;
     }
 
 
@@ -229,65 +229,76 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
     }
 
 
+    private FeedbackPayload createFeedbackPayload(boolean success, String message) {
+        FeedbackPayload feedbackPayload = new FeedbackPayload();
+        feedbackPayload.setSuccess(success);
+        feedbackPayload.setMessage(message);
+        return feedbackPayload;
+    }
+
+
     /* REGISTER */
 
 
-    private String register(ClientThread producer, Message message) {
+    private FeedbackPayload register(ClientThread producer, Message message) {
         RegisterPayload payload = (RegisterPayload) message.getPayload();
 
         Optional<String> errorMessage = Validator.validatePayload(payload, RegisterPayload.class);
         if (errorMessage.isPresent())
-            return errorMessage.get();
+            return createFeedbackPayload(false, errorMessage.get());
+
 
         return switch (message.getMode()) {
             case "producer" -> registerTopic(producer, message);
             case "subscriber" -> addSubscription(producer, message);
-            default -> "Unexpected error";
+            default -> createFeedbackPayload(false, "Unexpected error");
         };
-
-
     }
 
 
-    private String registerTopic(ClientThread producer, Message message) {
+    private FeedbackPayload registerTopic(ClientThread producer, Message message) {
         if (topicsDriver.topicExists(message.getTopic()))
-            return "Topic already exists";
+            return createFeedbackPayload(false, "Topic already exists");
 
         topicsDriver.addTopic(message.getTopic(), new TopicData(producer));
-        return "Successfully registered topic: " + message.getTopic();
+        return createFeedbackPayload(true, "Successfully registered topic: " + message.getTopic());
     }
 
 
-    private String addSubscription(ClientThread subscriber, Message message) {
+    private FeedbackPayload addSubscription(ClientThread subscriber, Message message) {
         if (!topicsDriver.topicExists(message.getTopic()))
-            return "Topic does not exists";
+            return createFeedbackPayload(false, "Topic does not exist");
 
         if (topicsDriver.getTopic(message.getTopic()).getSubscribers().contains(subscriber))
-            return "You already subscribes this topic";
+            return createFeedbackPayload(false, "You already subscribes this topic");
 
         topicsDriver.addSubscriber(message.getTopic(), subscriber);
-        return "Successfully subscribed topic: " + message.getTopic();
+        return createFeedbackPayload(true, "Successfully subscribed topic: " + message.getTopic());
     }
 
 
     /* STATUS */
 
 
-    private String status(Message message) {
+    private FeedbackPayload status(Message message) {
         StatusPayload payload = (StatusPayload) message.getPayload();
 
         Optional<String> errorMessage = Validator.validatePayload(payload, StatusPayload.class);
         if (errorMessage.isPresent())
-            return errorMessage.get();
+            return createFeedbackPayload(false, errorMessage.get());
+
+        StatusResponsePayload statusResponsePayload = new StatusResponseBuilder().build(serverController.getTopics());
+        statusResponsePayload.setSuccess(true);
 
         try {
-            StatusResponse statusResponse = new StatusResponseBuilder().build(serverController.getTopics());
-            return mapper.writeValueAsString(statusResponse);
-        } catch (JsonProcessingException e) {
-            e.printStackTrace();
-            return "Unexpected error";
+            String mappedStatusResponsePayload = mapper.writeValueAsString(statusResponsePayload);
+            mappedStatusResponsePayload = removeFieldFromJson(mappedStatusResponsePayload, "type");
+            return createFeedbackPayload(true, mappedStatusResponsePayload);
+        } catch (IOException e) {
+            return createFeedbackPayload(false, "Unexpected error");
         }
 
+//        return statusResponsePayload;
     }
 
 
@@ -298,23 +309,20 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
         Optional<String> validationError = validateMessage(client, message);
 
         if (validationError.isPresent())
-            return new MessageResponse(validationError.get(), Collections.singletonList(client));
+            return new MessageResponse(validationError.get(), Collections.singletonList(client), false);
 
         try {
             TopicData topicData = topicsDriver.getTopic(message.getTopic());
             String content = mapper.writeValueAsString(message);
             content = removeTypeFromPayload(content);
 
-            System.out.println("\nSending: " + content);
-            System.out.println("To: " + topicData.getSubscribers());
-
             List<ClientThread> recipients = new ArrayList<>(topicData.getSubscribers());
             recipients.add(client);
 
-            return new MessageResponse(content, recipients);
+            return new MessageResponse(content, recipients, true);
         } catch (JsonProcessingException e) {
             e.printStackTrace();
-            return new MessageResponse("Unexpected error", Collections.singletonList(client));
+            return new MessageResponse("Unexpected error", Collections.singletonList(client), false);
         }
     }
 
@@ -331,7 +339,7 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
         if (!topicsDriver.topicExists(topic))
             return Optional.of("Topic does not exists");
 
-        if (!isTopicProducer(client, topic))
+        if (!topicsDriver.isTopicProducer(client, topic))
             return Optional.of("You are not this topic producer");
 
         return Optional.empty();
@@ -341,95 +349,29 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
     /* WITHDRAW */
 
 
-    private String withdraw(ClientThread client, Message message) {
+    private FeedbackPayload withdraw(ClientThread client, Message message) {
         WithdrawPayload payload = (WithdrawPayload) message.getPayload();
 
         Optional<String> errorMessage = Validator.validatePayload(payload, WithdrawPayload.class);
         if (errorMessage.isPresent())
-            return errorMessage.get();
+            return createFeedbackPayload(false, errorMessage.get());
 
         String topicName = message.getTopic();
 
         if (!topicsDriver.topicExists(topicName))
-            return "Topic does not exists";
+            return createFeedbackPayload(false, "Topic does not exists");
 
-        if (isTopicProducer(client, topicName)) {
-            unregisterTopic(topicName);
-            return null;
+        if (topicsDriver.isTopicProducer(client, topicName)) {
+            topicsDriver.unregisterTopic(topicName);
+            return createFeedbackPayload(true, "Successfully unregistered topic: " + topicName);
         }
 
-        if (isTopicSubscriber(client, topicName)) {
-            unregisterSubscription(topicName, client);
-            return null;
+        if (topicsDriver.isTopicSubscriber(client, topicName)) {
+            topicsDriver.unregisterSubscription(topicName, client);
+            return createFeedbackPayload(true, "Successfully unsubscribed topic: " + topicName);
         }
 
-        return "You have nothing in common with given topic";
+        return createFeedbackPayload(false, "You have nothing in common with given topic");
     }
-
-
-    private void unregisterTopic(String topicName) {
-        TopicData topicData = topicsDriver.getTopic(topicName);
-
-        // Subscribers
-        SubscriptionRemoveData subscriptionRemoveData = removeSubscribers(topicData, topicName);
-        notifyAboutSubscriptionRemove(subscriptionRemoveData);
-        disconnectClients(subscriptionRemoveData.getClientsToDisconnect());
-
-        // Producer
-        ClientThread producer = topicData.getProducer();
-        addMessageToQueue("Your topic has been unregistered: " + topicName, producer);
-
-        if (!isSubscriberOrProducer(topicName, producer))
-            producer.disconnect();
-
-        topicsDriver.removeTopic(topicName);
-    }
-
-
-    private void unregisterSubscription(String topicName, ClientThread client) {
-        TopicData topicData = topicsDriver.getTopic(topicName);
-        boolean status = topicData.getSubscribers().remove(client);
-
-        if (status)
-            addMessageToQueue("Unsubscribed: " + topicName, client);
-        else
-            addMessageToQueue("Unable to remove subscription", client);
-
-        if (!isSubscriberOrProducer(topicName, client))
-            client.disconnect();
-    }
-
-
-    private SubscriptionRemoveData removeSubscribers(TopicData topicData, String topicName) {
-        SubscriptionRemoveData removeData = new SubscriptionRemoveData(topicName);
-
-        for (ClientThread subscriber : topicData.getSubscribers()) {
-            if (isSubscriberOrProducer(topicName, subscriber)) {
-                removeData.addClientToNotify(subscriber);
-                continue;
-            }
-
-            removeData.addClientToDisconnect(subscriber);
-        }
-
-        return removeData;
-    }
-
-
-    private void notifyAboutSubscriptionRemove(SubscriptionRemoveData subscriptionRemoveData) {
-        String topicName = subscriptionRemoveData.getTopicName();
-
-        List<ClientThread> recipients = new ArrayList<>();
-        recipients.addAll(subscriptionRemoveData.getClientsToNotify());
-        recipients.addAll(subscriptionRemoveData.getClientsToDisconnect());
-
-        addMessageToQueue("Topic you subscribed has been removed: " + topicName, recipients);
-    }
-
-
-    private void disconnectClients(List<ClientThread> clients) {
-        clients.forEach(ClientThread::disconnect);
-    }
-
 
 }

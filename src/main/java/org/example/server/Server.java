@@ -10,6 +10,7 @@ import org.example.server.messages_to_send.Notification;
 import org.example.server.receive_message.ReceivedMessage;
 import org.example.server.receive_message.ReceivedMessagesQueue;
 import org.example.server.receive_message.ReceivedMessagesQueueMonitorThread;
+import org.example.server.receive_message.withdraw.SubscriptionRemoveData;
 import org.example.server.topics.TopicData;
 import org.example.utilities.Validator;
 
@@ -39,7 +40,7 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
 
         this.config = new ConfigLoader().loadConfig();
 
-        this.communicationThread = new CommunicationThread(this, this, hostname, port, timeout);
+        this.communicationThread = new CommunicationThread(this, this, this, this, hostname, port, timeout);
         this.receivedMessagesQueueMonitorThread = new ReceivedMessagesQueueMonitorThread(this, this, this);
         this.uiThread = new UIThread(this);
 
@@ -186,6 +187,98 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
             TopicData topicData = registeredTopics.get(topicName);
             return new TopicData(topicData.getProducer(), topicData.getSubscribers());
         }
+    }
+
+
+    @Override
+    public boolean isSubscriberOrProducer(String topicNameToSkip, ClientThread client) {
+        if (topicNameToSkip == null)
+            topicNameToSkip = "";
+
+        Map<String, TopicData> topics = getTopics();
+
+        for (Map.Entry<String, TopicData> entry : topics.entrySet()) {
+            if (entry.getKey().equals(topicNameToSkip))
+                continue;
+
+            TopicData topicData = entry.getValue();
+            if (client.equals(topicData.getProducer()) || topicData.getSubscribers().contains(client))
+                return true;
+
+        }
+
+        return false;
+    }
+
+
+    @Override
+    public void unregisterTopic(String topicName) {
+        TopicData topicData = getTopic(topicName);
+
+        // Subscribers
+        SubscriptionRemoveData subscriptionRemoveData = removeSubscribers(topicData, topicName);
+        disconnectClients(subscriptionRemoveData.getClientsToDisconnect());
+
+        // Producer
+        ClientThread producer = topicData.getProducer();
+
+        if (!isSubscriberOrProducer(topicName, producer))
+            producer.disconnect();
+
+        removeTopic(topicName);
+    }
+
+
+    @Override
+    public void unregisterSubscription(String topicName, ClientThread client) {
+        TopicData topicData = getTopic(topicName);
+        topicData.getSubscribers().remove(client);
+
+        if (!isSubscriberOrProducer(topicName, client))
+            client.disconnect();
+    }
+
+
+    @Override
+    public boolean isTopicProducer(ClientThread client, String topicName) {
+        TopicData topicData = getTopic(topicName);
+
+        if (topicData == null)
+            return false;
+
+        return client.equals(topicData.getProducer());
+    }
+
+
+    @Override
+    public boolean isTopicSubscriber(ClientThread client, String topicName) {
+        TopicData topicData = getTopic(topicName);
+
+        if (topicData == null)
+            return false;
+
+        return topicData.getSubscribers().contains(client);
+    }
+
+
+    private SubscriptionRemoveData removeSubscribers(TopicData topicData, String topicName) {
+        SubscriptionRemoveData removeData = new SubscriptionRemoveData(topicName);
+
+        for (ClientThread subscriber : topicData.getSubscribers()) {
+            if (isSubscriberOrProducer(topicName, subscriber)) {
+                removeData.addClientToNotify(subscriber);
+                continue;
+            }
+
+            removeData.addClientToDisconnect(subscriber);
+        }
+
+        return removeData;
+    }
+
+
+    private void disconnectClients(List<ClientThread> clients) {
+        clients.forEach(ClientThread::disconnect);
     }
 
 

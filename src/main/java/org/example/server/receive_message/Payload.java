@@ -24,4 +24,5 @@ import javax.validation.constraints.NotBlank;
 @Data
 public abstract class Payload {
     private String type;
+    private boolean success;
 }
