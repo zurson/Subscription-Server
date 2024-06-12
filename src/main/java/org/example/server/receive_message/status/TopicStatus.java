@@ -10,6 +10,7 @@ import java.util.List;
 public class TopicStatus {
 
     private String topic;
+    private String producer;
     private List<String> subscribers;
 
 }

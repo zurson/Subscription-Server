@@ -20,8 +20,9 @@ public class StatusResponseBuilder {
 
         for (Map.Entry<String, TopicData> entry : topics.entrySet()) {
             String topic = entry.getKey();
+            String prodcuer = entry.getValue().getProducer().toString();
             List<String> subscribers = entry.getValue().getSubscribers().stream().map(ClientThread::toString).toList();
-            topicStatusResponse.add(new TopicStatus(topic, subscribers));
+            topicStatusResponse.add(new TopicStatus(topic, prodcuer, subscribers));
         }
 
         return new StatusResponsePayload(topicStatusResponse);

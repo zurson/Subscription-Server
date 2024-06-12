@@ -15,7 +15,6 @@ import org.example.server.receive_message.register.RegisterPayload;
 import org.example.server.receive_message.status.StatusPayload;
 import org.example.server.receive_message.status.StatusResponseBuilder;
 import org.example.server.receive_message.status.StatusResponsePayload;
-import org.example.server.receive_message.withdraw.SubscriptionRemoveData;
 import org.example.server.receive_message.withdraw.WithdrawPayload;
 import org.example.server.topics.TopicData;
 import org.example.utilities.Validator;
@@ -103,9 +102,6 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
 
             case "message":
                 MessageResponse response = message(client, message);
-
-                System.out.println("\nSending: " + response.getContent());
-                System.out.println("To: " + response.getRecipients());
 
                 payload = createFeedbackPayload(response.isSuccess(), response.getContent());
                 recipients = response.getRecipients();
@@ -361,11 +357,9 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
         if (!topicsDriver.topicExists(topicName))
             return createFeedbackPayload(false, "Topic does not exists");
 
-
         switch (message.getMode()) {
             case "producer":
                 if (topicsDriver.isTopicProducer(client, topicName)) {
-                    System.out.println("PRODUCER");
                     topicsDriver.unregisterTopic(topicName);
                     return createFeedbackPayload(true, "Successfully unregistered topic: " + topicName);
                 }
@@ -373,7 +367,6 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
 
             case "subscriber":
                 if (topicsDriver.isTopicSubscriber(client, topicName)) {
-                    System.out.println("SUIBER");
                     topicsDriver.unregisterSubscription(topicName, client);
                     return createFeedbackPayload(true, "Successfully unsubscribed topic: " + topicName);
                 }
