@@ -22,6 +22,7 @@ import org.example.utilities.Validator;
 import javax.validation.ConstraintViolation;
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.example.settings.Settings.QUEUE_CHECK_INTERVAL_MS;
 
@@ -31,11 +32,13 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
     private final MessagesQueueDriver messagesQueueDriver;
     private final TopicsDriver topicsDriver;
     private final ServerController serverController;
+    private final AtomicBoolean running;
 
     public ReceivedMessagesQueueMonitorThread(MessagesQueueDriver messagesQueueDriver, TopicsDriver topicsDriver, ServerController serverController) {
         this.messagesQueueDriver = messagesQueueDriver;
         this.topicsDriver = topicsDriver;
         this.serverController = serverController;
+        this.running = new AtomicBoolean(false);
 
         this.mapper = new ObjectMapper();
         this.mapper.registerModule(new JavaTimeModule());
@@ -44,9 +47,10 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
 
     @Override
     public void run() {
+        running.set(true);
 
         try {
-            while (true) {
+            while (running.get()) {
                 ReceivedMessage receivedMessage = messagesQueueDriver.pollMessage();
 
                 if (receivedMessage == null) {
@@ -59,6 +63,11 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
         } catch (InterruptedException ignored) {
         }
 
+    }
+
+
+    public synchronized void stopThread() {
+        running.set(false);
     }
 
 

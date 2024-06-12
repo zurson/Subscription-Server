@@ -4,38 +4,69 @@ import org.example.client.ClientThread;
 import org.example.interfaces.ServerController;
 import org.example.server.topics.TopicData;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.List;
 import java.util.Map;
-import java.util.Scanner;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class UIThread extends Thread {
 
-    private final Scanner scanner;
     private final ServerController serverController;
+    private final AtomicBoolean running;
+    private final BufferedReader bufferedReader;
 
     public UIThread(ServerController serverController) {
         this.serverController = serverController;
-        scanner = new Scanner(System.in);
+        this.running = new AtomicBoolean(false);
+        bufferedReader = new BufferedReader(new InputStreamReader(System.in));
     }
 
     @Override
     public void run() {
+        running.set(true);
 
-        while (true) {
-            System.out.print("\nEnter command: ");
-            String input = scanner.nextLine().trim();
+        while (running.get()) {
+            try {
+                Thread.sleep(1);
+                System.out.print("\nEnter command: ");
 
-            if (input.isBlank())
-                continue;
+                while (!bufferedReader.ready())
+                    Thread.sleep(1);
 
-            boolean status = processCommand(input);
+                String input = bufferedReader.readLine().trim();
 
-            if (!status)
-                System.out.println("Command not found!");
+                if (input.isBlank())
+                    continue;
+
+                boolean status = processCommand(input);
+
+                if (!status)
+                    System.out.println("Command not found!");
+
+            } catch (InterruptedException | IOException e){
+                System.err.println("Closing UIThread (" + e.getMessage() + ")");
+                break;
+            }
         }
 
+    }
 
+
+    public synchronized void stopThread() {
+        if (!running.get())
+            return;
+
+        running.set(false);
+
+        try {
+            bufferedReader.close();
+            this.interrupt();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
 

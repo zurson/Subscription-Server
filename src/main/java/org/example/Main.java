@@ -13,12 +13,12 @@ public class Main {
             Config config = configLoader.loadConfig();
 
             Server server = new Server(config);
-
             Thread thread = new Thread(server);
             thread.start();
 
-            Thread.sleep(7000);
+            Thread.sleep(5000);
             server.stopServer();
+
 
 
 //            thread.join();

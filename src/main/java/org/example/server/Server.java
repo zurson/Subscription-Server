@@ -19,7 +19,9 @@ import java.util.*;
 
 public class Server implements Runnable, ClientsListDriver, ReceiveDriver, MessagesQueueDriver, TopicsDriver, ServerController {
     private final Config config;
-    private final Thread communicationThread, uiThread, receivedMessagesQueueMonitorThread;
+    private final CommunicationThread communicationThread;
+    private final UIThread uiThread;
+    private final ReceivedMessagesQueueMonitorThread receivedMessagesQueueMonitorThread;
 
     private final Set<ClientThread> clientList;
 
@@ -63,8 +65,9 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
 
 
     public void stopServer() {
-        uiThread.interrupt();
-        communicationThread.interrupt();
+        uiThread.stopThread();
+        communicationThread.stopThread();
+        receivedMessagesQueueMonitorThread.stopThread();
     }
 
 

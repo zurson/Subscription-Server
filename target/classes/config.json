@@ -1,3 +1,6 @@
 {
-  "serverId": "server-123"
+  "ServerId": "server-123",
+  "ListenAddresses": "*",
+  "ListenPort": 7,
+  "TimeOut": 3000
 }
