@@ -65,6 +65,8 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
 
 
     public void stopServer() {
+        clientList.forEach(ClientThread::stopThread);
+
         uiThread.stopThread();
         communicationThread.stopThread();
         receivedMessagesQueueMonitorThread.stopThread();

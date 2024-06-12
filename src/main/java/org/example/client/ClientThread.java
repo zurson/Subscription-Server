@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.example.settings.Settings.CLIENT_NOT_CONNECTED_MSG;
 import static org.example.settings.Settings.MAX_TRANSFER_BYTES;
@@ -30,6 +31,7 @@ public class ClientThread extends Thread {
     private final ReceiveDriver receiveDriver;
     private final TopicsDriver topicsDriver;
     private final ServerController serverController;
+    private final AtomicBoolean running;
 
 
     public ClientThread(ClientsListDriver clientsListDriver, ReceiveDriver receiveDriver, TopicsDriver topicsDriver, ServerController serverController, Socket clientSocket) throws IOException {
@@ -42,6 +44,7 @@ public class ClientThread extends Thread {
         this.topicsDriver = topicsDriver;
         this.serverController = serverController;
 
+        this.running = new AtomicBoolean(false);
         this.outputStream = new DataOutputStream(this.clientSocket.getOutputStream());
         this.inputStream = new DataInputStream(this.clientSocket.getInputStream());
     }
@@ -49,7 +52,9 @@ public class ClientThread extends Thread {
 
     @Override
     public void run() {
-        while (true) {
+        running.set(true);
+
+        while (running.get()) {
             try {
                 String recvMessage = recvMessage();
                 receiveDriver.addNewMessage(new ReceivedMessage(recvMessage, this));
@@ -58,6 +63,18 @@ public class ClientThread extends Thread {
                 disconnect();
                 break;
             }
+        }
+    }
+
+
+    public synchronized void stopThread() {
+        if (!running.get())
+            return;
+
+        running.set(false);
+        try {
+            clientSocket.close();
+        } catch (Exception ignored) {
         }
     }
 
