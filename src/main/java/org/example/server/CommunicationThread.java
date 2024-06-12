@@ -8,25 +8,29 @@ import org.example.interfaces.TopicsDriver;
 
 import java.io.IOException;
 import java.net.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class CommunicationThread extends Thread {
 
     private final int port;
-    private final String hostname;
+    private final String listenAddresses;
     private final ServerSocket serverSocket;
     private final ClientsListDriver clientsListDriver;
     private final ReceiveDriver receiveDriver;
     private final TopicsDriver topicsDriver;
     private final ServerController serverController;
+    private final AtomicBoolean running;
 
 
-    public CommunicationThread(ClientsListDriver clientsListDriver, ReceiveDriver receiveDriver, TopicsDriver topicsDriver, ServerController serverController, String hostname, int port, int timeout) throws IOException {
-        this.hostname = hostname;
+    public CommunicationThread(ClientsListDriver clientsListDriver, ReceiveDriver receiveDriver, TopicsDriver topicsDriver, ServerController serverController, String listenAddresses, int port, int timeout) throws IOException {
+        this.listenAddresses = listenAddresses;
         this.port = port;
         this.clientsListDriver = clientsListDriver;
         this.receiveDriver = receiveDriver;
         this.topicsDriver = topicsDriver;
         this.serverController = serverController;
+
+        this.running = new AtomicBoolean(false);
 
         serverSocket = new ServerSocket();
         serverSocket.setSoTimeout(timeout);
@@ -37,18 +41,19 @@ public class CommunicationThread extends Thread {
 
     @Override
     public void run() {
+        running.set(true);
         listenForConnections();
     }
 
 
     private void bindSocket() throws IOException {
-        SocketAddress socketPort = new InetSocketAddress(hostname, port);
+        SocketAddress socketPort = new InetSocketAddress(listenAddresses, port);
         serverSocket.bind(socketPort);
     }
 
 
     private void listenForConnections() {
-        while (true) {
+        while (running.get()) {
             Socket clientSocket;
 
             try {
@@ -58,6 +63,7 @@ public class CommunicationThread extends Thread {
                 continue;
             } catch (IOException e) {
                 e.printStackTrace();
+                stopThread();
                 break;
             }
 
@@ -84,6 +90,20 @@ public class CommunicationThread extends Thread {
         thread.start();
 
         return clientThread;
+    }
+
+
+    public synchronized void stopThread() {
+        if (!running.get())
+            return;
+
+        running.set(false);
+
+        try {
+            serverSocket.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
 }
