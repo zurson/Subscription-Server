@@ -20,7 +20,7 @@ public class CommunicationThread extends Thread {
     private final TopicsDriver topicsDriver;
     private final ServerController serverController;
     private final AtomicBoolean running;
-
+    private final int timeout;
 
     public CommunicationThread(ClientsListDriver clientsListDriver, ReceiveDriver receiveDriver, TopicsDriver topicsDriver, ServerController serverController, String listenAddresses, int port, int timeout) throws IOException {
         this.listenAddresses = listenAddresses;
@@ -29,6 +29,7 @@ public class CommunicationThread extends Thread {
         this.receiveDriver = receiveDriver;
         this.topicsDriver = topicsDriver;
         this.serverController = serverController;
+        this.timeout = timeout;
 
         this.running = new AtomicBoolean(false);
 
@@ -68,6 +69,7 @@ public class CommunicationThread extends Thread {
             }
 
             try {
+                clientSocket.setSoTimeout(this.timeout);
                 ClientThread clientThread = spawnClientThread(clientSocket);
                 clientsListDriver.addClient(clientThread);
             } catch (IOException e) {

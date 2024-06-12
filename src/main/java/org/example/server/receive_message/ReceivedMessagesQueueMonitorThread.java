@@ -58,7 +58,9 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
                     continue;
                 }
 
-                manageMessage(receivedMessage);
+                boolean status = manageMessage(receivedMessage);
+                if (status)
+                    receivedMessage.client().setActionRequest(true);
             }
         } catch (InterruptedException ignored) {
         }
@@ -71,8 +73,7 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
     }
 
 
-    private void manageMessage(ReceivedMessage receivedMessage) {
-//        synchronized (serverController.getTopicSynchronizer()) {
+    private boolean manageMessage(ReceivedMessage receivedMessage) {
         String content = receivedMessage.content();
         ClientThread client = receivedMessage.client();
 
@@ -80,19 +81,18 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
 
         if (message == null) {
             System.err.println("VALIDATION ERROR: " + receivedMessage.content());
-            return;
+            return false;
         }
 
         if (changingExistingId(client, message)) {
             addErrorMessageToQueue(message, "Cannot to change client id", client);
-            return;
+            return false;
         }
 
         if (!isPermitted(message.getSenderId(), client)) {
             addErrorMessageToQueue(message, "Given ID is busy", client);
-            ;
             client.disconnect();
-            return;
+            return false;
         }
 
         Payload payload;
@@ -128,7 +128,7 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
         }
 
         if (recipients.isEmpty() || payload == null)
-            return;
+            return false;
 
         try {
             client.setClientId(message.getSenderId());
@@ -137,12 +137,13 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
             String mappedFeedback = mapper.writeValueAsString(message);
 
             addMessageToQueue(mappedFeedback, recipients);
+            return true;
         } catch (JsonProcessingException e) {
             e.printStackTrace();
             System.err.println("Map error");
         }
 
-//        }
+        return false;
     }
 
 

@@ -1,5 +1,6 @@
 package org.example.client;
 
+import lombok.Setter;
 import org.example.interfaces.ClientsListDriver;
 import org.example.interfaces.ReceiveDriver;
 import org.example.interfaces.ServerController;
@@ -11,6 +12,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -24,6 +26,9 @@ public class ClientThread extends Thread {
     private final Socket clientSocket;
 
     private String clientId;
+
+    @Setter
+    private boolean actionRequest;
 
     private final DataOutputStream outputStream;
     private final DataInputStream inputStream;
@@ -58,6 +63,11 @@ public class ClientThread extends Thread {
             try {
                 String recvMessage = recvMessage();
                 receiveDriver.addNewMessage(new ReceivedMessage(recvMessage, this));
+            } catch (SocketTimeoutException e) {
+                if (actionRequest)
+                    continue;
+                disconnectClientDueToNoActivity();
+                break;
             } catch (IOException e) {
                 System.out.println("Client " + clientSocket.getRemoteSocketAddress() + " disconnected (" + clientId + ")");
                 disconnect();
@@ -76,6 +86,12 @@ public class ClientThread extends Thread {
             clientSocket.close();
         } catch (Exception ignored) {
         }
+    }
+
+
+    private void disconnectClientDueToNoActivity() {
+        System.err.println("Timeout: No data received from client " + clientSocket.getRemoteSocketAddress() + " (" + clientId + ")");
+        disconnect();
     }
 
 
