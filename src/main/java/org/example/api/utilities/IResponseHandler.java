@@ -4,6 +4,8 @@ import org.example.api.utilities.payload.FeedbackPayload;
 
 public interface IResponseHandler {
 
-    void handleServerResponse(FeedbackPayload feedbackPayload);
+    void addNewResponse(FeedbackPayload feedbackPayload);
+
+    void notifySubscription(Message message);
 
 }

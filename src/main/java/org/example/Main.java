@@ -12,23 +12,34 @@ public class Main {
         try {
             Client client = new Client();
             client.start("127.0.0.1", 7, "CID");
+            client.getServerLogs((success, message) -> {
+                if (!success)
+                    System.out.println("Error: " + message);
+                else
+                    System.out.println("Success: " + message);
+            });
 
             client.createProducer(topicName);
+//            client.createProducer(topicName);
 //            client.createProducer(topicName + "x");
 //            client.createProducer(topicName + "y");
 
             client.createSubscriber(topicName, message -> {
-                FeedbackPayload feedbackPayload = (FeedbackPayload) message.getPayload();
+                MessagePayload messagePayload = (MessagePayload) message.getPayload();
                 System.out.println("\nPowiadomienie z: " + message.getTopic());
-                System.out.println(feedbackPayload.getMessage());
+                System.out.println(messagePayload.getMessage() + "\n");
             });
 
-            String mess = client.getStatus();
-            System.out.println("STATUS: " + mess);
+//            client.createSubscriber(topicName + "y", message -> {
+//                MessagePayload messagePayload = (MessagePayload) message.getPayload();
+//                System.out.println("\nPowiadomienie z: " + message.getTopic());
+//                System.out.println(messagePayload.getMessage() + "\n");
+//            });
 
-            client.produce(topicName, new MessagePayload("test message lol"));
+            client.produce(topicName, new MessagePayload("produce for normal"));
+//            client.produce(topicName + "y", new MessagePayload("produce for y"));
 
-
+//            System.out.println("STATUS: " + client.getStatus());
 
 //            client.getServerStatus(message -> {
 //                System.out.println("\nSTATUS:");
@@ -37,7 +48,13 @@ public class Main {
 
 //            client.stop();
 
-//            client.withdrawSubscriber(topicName);
+            client.withdrawSubscriber(topicName);
+            client.produce(topicName, new MessagePayload("produce for normal"));
+//            client.produce(topicName, new MessagePayload("produce for normal"));
+//            client.produce(topicName, new MessagePayload("produce for normal"));
+
+//            Thread.sleep(5000);
+            client.produce(topicName, new MessagePayload("produce for normal"));
 
 //            client.createSubscriber(topicName + "2222", message -> {
 //                System.out.println("YEAH");

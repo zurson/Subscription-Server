@@ -7,10 +7,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.example.api.exceptions.ErrorResponseException;
 import org.example.api.exceptions.ValidationException;
 import org.example.api.threads.ServerListenerThread;
-import org.example.api.utilities.ICallbackDriver;
-import org.example.api.utilities.IResponseHandler;
-import org.example.api.utilities.Message;
-import org.example.api.utilities.Validator;
+import org.example.api.utilities.*;
 import org.example.api.utilities.payload.FeedbackPayload;
 import org.example.api.utilities.payload.MessagePayload;
 import org.example.api.utilities.payload.Payload;
@@ -24,9 +21,8 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import static org.example.api.settings.Settings.SERVER_CONNECTION_TIMEOUT_MS;
@@ -35,9 +31,11 @@ import static org.example.api.settings.Settings.SERVER_CONNECTION_TIMEOUT_MS;
 public class Client implements ICallbackDriver, IResponseHandler {
 
     private final Object lock = new Object();
-    private FeedbackPayload feedback;
+    private FeedbackPayload selfStatusPayload;
 
     private final Map<String, Consumer<Message>> callbacks;
+    private final ServerResponsesQueue<ServerResponse> serverResponses;
+    private final Set<Instant> serverRequestsTimestamps;
 
     private final ObjectMapper mapper;
     private DataOutputStream outputStream;
@@ -45,20 +43,26 @@ public class Client implements ICallbackDriver, IResponseHandler {
     private Socket clientSocket;
     private String clientId;
 
+    private Thread monitorThread;
+    private boolean serverLogsEnabled;
 
     public Client() {
         callbacks = Collections.synchronizedMap(new HashMap<>());
         this.mapper = new ObjectMapper();
         this.mapper.registerModule(new JavaTimeModule());
+
+        this.serverResponses = new ServerResponsesQueue<>();
+        this.serverRequestsTimestamps = new HashSet<>();
+
+        serverLogsEnabled = false;
     }
 
 
     /* SEND MESSAGE */
 
 
-    private FeedbackPayload sendMessage(Message message) throws IOException {
+    private void sendMessage(Message message) throws IOException {
         synchronized (lock) {
-            feedback = null;
             String mappedMessage = mapper.writeValueAsString(message);
             byte[] messageBytes = mappedMessage.getBytes(StandardCharsets.UTF_8);
 
@@ -67,15 +71,22 @@ public class Client implements ICallbackDriver, IResponseHandler {
             outputStream.write(messageBytes);
             outputStream.flush();
 
+            serverRequestsTimestamps.add(message.getTimestamp());
+
+            if (!message.getType().equals("status"))
+                return;
+
             try {
-                lock.wait(message.getType().equals("message") ? 1 : 5000);
+                lock.wait(5000);
             } catch (InterruptedException e) {
-                feedback = new FeedbackPayload();
-                feedback.setMessage("Time expired");
-                feedback.setSuccess(false);
             }
 
-            return feedback;
+            if (selfStatusPayload == null) {
+                selfStatusPayload = new FeedbackPayload();
+                selfStatusPayload.setMessage("Time expired");
+                selfStatusPayload.setSuccess(false);
+            }
+
         }
     }
 
@@ -133,7 +144,7 @@ public class Client implements ICallbackDriver, IResponseHandler {
     }
 
 
-    public void getServerStatus(Consumer<Message> callback) throws IOException, ErrorResponseException {
+    public void getServerStatus(Consumer<Message> callback) throws IOException {
         if (!isConnected())
             throw new IllegalStateException("Client is not connected");
 
@@ -147,15 +158,11 @@ public class Client implements ICallbackDriver, IResponseHandler {
                 }
         );
 
-        callbacks.put("status", callback);
-
-        FeedbackPayload response = sendMessage(message);
-        if (!response.isSuccess())
-            throw new ErrorResponseException(response.getMessage());
+        sendMessage(message);
     }
 
 
-    public void createProducer(String topicName) throws IOException, ErrorResponseException {
+    public void createProducer(String topicName) throws IOException {
         if (!isConnected())
             throw new IllegalStateException("Client is not connected");
 
@@ -169,15 +176,11 @@ public class Client implements ICallbackDriver, IResponseHandler {
                 }
         );
 
-        FeedbackPayload response = sendMessage(message);
-        if (!response.isSuccess())
-            throw new ErrorResponseException(response.getMessage());
-
-        System.out.println(response.getMessage());
+        sendMessage(message);
     }
 
 
-    public void withdrawProducer(String topicName) throws IOException, ErrorResponseException {
+    public void withdrawProducer(String topicName) throws IOException {
         if (!isConnected())
             throw new IllegalStateException("Client is not connected");
 
@@ -191,13 +194,11 @@ public class Client implements ICallbackDriver, IResponseHandler {
                 }
         );
 
-        FeedbackPayload response = sendMessage(message);
-        if (!response.isSuccess())
-            throw new ErrorResponseException(response.getMessage());
+        sendMessage(message);
     }
 
 
-    public void produce(String topicName, MessagePayload payload) throws IOException, ErrorResponseException {
+    public void produce(String topicName, MessagePayload payload) throws IOException {
         if (!isConnected())
             throw new IllegalStateException("Client is not connected");
 
@@ -210,14 +211,11 @@ public class Client implements ICallbackDriver, IResponseHandler {
                 payload
         );
 
-        /*FeedbackPayload response = */
         sendMessage(message);
-//        if (!response.isSuccess())
-//            throw new ErrorResponseException(response.getMessage());
     }
 
 
-    public void createSubscriber(String topicName, Consumer<Message> callback) throws IOException, ErrorResponseException {
+    public void createSubscriber(String topicName, Consumer<Message> callback) throws IOException {
         if (!isConnected())
             throw new IllegalStateException("Client is not connected");
 
@@ -233,13 +231,11 @@ public class Client implements ICallbackDriver, IResponseHandler {
 
         callbacks.put(topicName, callback);
 
-        FeedbackPayload response = sendMessage(message);
-        if (!response.isSuccess())
-            throw new ErrorResponseException(response.getMessage());
+        sendMessage(message);
     }
 
 
-    public void withdrawSubscriber(String topicName) throws IOException, ErrorResponseException {
+    public void withdrawSubscriber(String topicName) throws IOException {
         if (!isConnected())
             throw new IllegalStateException("Client is not connected");
 
@@ -253,9 +249,7 @@ public class Client implements ICallbackDriver, IResponseHandler {
                 }
         );
 
-        FeedbackPayload response = sendMessage(message);
-        if (!response.isSuccess())
-            throw new ErrorResponseException(response.getMessage());
+        sendMessage(message);
     }
 
 
@@ -287,15 +281,50 @@ public class Client implements ICallbackDriver, IResponseHandler {
                 }
         );
 
-        FeedbackPayload response = sendMessage(message);
-        if (!response.isSuccess())
-            throw new ErrorResponseException(response.getMessage());
+        /*FeedbackPayload response = */
 
-        String json = preparePayloadForStatusesConversion(response.getMessage());
+        sendMessage(message);
+
+
+        if (!selfStatusPayload.isSuccess())
+            throw new ErrorResponseException(selfStatusPayload.getMessage());
+
+        String json = preparePayloadForStatusesConversion(selfStatusPayload.getMessage());
         StatusResponse statusResponse = mapJsonToClass(json, StatusResponse.class);
 
         ClientTopics clientTopics = getClientTopics(statusResponse);
+
+        selfStatusPayload = null;
         return convertToJson(clientTopics);
+    }
+
+
+    public void getServerLogs(BiConsumer<Boolean, String> callback) {
+        if (serverLogsEnabled)
+            return;
+
+        serverLogsEnabled = true;
+
+        monitorThread = new Thread(() -> {
+            while (true) {
+                try {
+                    ServerResponse serverResponse = serverResponses.poll();
+
+                    if (serverResponse == null) {
+                        Thread.sleep(1);
+                        continue;
+                    }
+
+                    FeedbackPayload payload = serverResponse.getPayload();
+                    callback.accept(payload.isSuccess(), payload.getMessage());
+                } catch (InterruptedException ignored) {
+                    break;
+                }
+            }
+        });
+
+        monitorThread.setDaemon(true);
+        monitorThread.start();
     }
 
 
@@ -330,6 +359,7 @@ public class Client implements ICallbackDriver, IResponseHandler {
         return clientTopics;
     }
 
+
     /* ICallbackDriver */
 
 
@@ -342,11 +372,34 @@ public class Client implements ICallbackDriver, IResponseHandler {
 
 
     @Override
-    public void handleServerResponse(FeedbackPayload feedbackPayload) {
+    public void addNewResponse(FeedbackPayload feedbackPayload) {
+        serverResponses.add(new ServerResponse(feedbackPayload.getTimestampOfMessage(), feedbackPayload));
+//        System.out.println("Server Response: " + feedbackPayload.getMessage());
+
         synchronized (lock) {
-            feedback = feedbackPayload;
-            lock.notify();
+            try {
+                String json = preparePayloadForStatusesConversion(feedbackPayload.getMessage());
+                mapJsonToClass(json, StatusResponse.class);
+                selfStatusPayload = feedbackPayload;
+                lock.notify();
+            } catch (IOException ignored) {
+            }
         }
+    }
+
+
+    @Override
+    public void notifySubscription(Message message) {
+        if (!message.getType().equals("message"))
+            return;
+
+        String topicName = message.getTopic();
+
+        Consumer<Message> callback = getCallback(topicName);
+        if (callback == null)
+            return;
+
+        callback.accept(message);
     }
 
 

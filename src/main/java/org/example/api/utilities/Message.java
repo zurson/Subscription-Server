@@ -14,7 +14,7 @@ import java.time.Instant;
 @AllArgsConstructor
 public class Message {
     @NotNull
-    @Pattern(regexp = "register|withdraw|message|status", message = "Unknown type")
+    @Pattern(regexp = "acknowledge|reject|message", message = "Unknown type")
     private String type;
 
     @NotNull(message = "senderId null")

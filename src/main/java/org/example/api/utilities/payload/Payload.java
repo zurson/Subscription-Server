@@ -12,10 +12,10 @@ import lombok.NoArgsConstructor;
         property = "type"
 )
 @JsonSubTypes({
-        @JsonSubTypes.Type(value = FeedbackPayload.class, name = "register"),
-        @JsonSubTypes.Type(value = FeedbackPayload.class, name = "status"),
-        @JsonSubTypes.Type(value = FeedbackPayload.class, name = "message"),
-        @JsonSubTypes.Type(value = FeedbackPayload.class, name = "withdraw")
+        @JsonSubTypes.Type(value = FeedbackPayload.class, name = "acknowledge"),
+        @JsonSubTypes.Type(value = FeedbackPayload.class, name = "reject"),
+        @JsonSubTypes.Type(value = MessagePayload.class, name = "message"),
+//        @JsonSubTypes.Type(value = FeedbackPayload.class, name = "withdraw")
 })
 @NoArgsConstructor
 @AllArgsConstructor

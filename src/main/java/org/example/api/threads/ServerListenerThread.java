@@ -5,15 +5,19 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import org.example.api.utilities.*;
+import org.example.api.utilities.ICallbackDriver;
+import org.example.api.utilities.IResponseHandler;
+import org.example.api.utilities.Message;
+import org.example.api.utilities.Validator;
 import org.example.api.utilities.payload.FeedbackPayload;
 
 import javax.validation.ConstraintViolation;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.net.Socket;
-import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
@@ -22,7 +26,7 @@ public class ServerListenerThread extends Thread {
     private final ObjectMapper mapper;
     private final ICallbackDriver callbackDriver;
     private final IResponseHandler responseHandler;
-    private final ReceivedMessagesQueue<String> receivedMessagesQueue;
+    private final BlockingQueue<String> responseQueue;
 
     private final Socket clientSocket;
     private final DataInputStream inputStream;
@@ -38,7 +42,7 @@ public class ServerListenerThread extends Thread {
         this.responseHandler = responseHandler;
         this.running = new AtomicBoolean(false);
 
-        this.receivedMessagesQueue = new ReceivedMessagesQueue<>();
+        responseQueue = new LinkedBlockingQueue<>();
         startQueueListenerThread();
     }
 
@@ -50,7 +54,7 @@ public class ServerListenerThread extends Thread {
         while (running.get()) {
             try {
                 String message = receiveMessage();
-                receivedMessagesQueue.add(message);
+                responseQueue.add(message);
             } catch (IOException e) {
                 e.printStackTrace();
                 stopThread();
@@ -60,7 +64,7 @@ public class ServerListenerThread extends Thread {
 
 
     private void manageMessage(String receivedMessage) {
-//        System.out.println("RECEIVED: " + receivedMessage);
+//        System.err.println("RECEIVED: " + receivedMessage);
         Message message = mapReceivedMessage(receivedMessage);
 
         if (message == null) {
@@ -68,13 +72,10 @@ public class ServerListenerThread extends Thread {
             return;
         }
 
-        boolean success = message.getPayload().isSuccess();
-
-        if (success)
-            runAction(message);
+        responseHandler.notifySubscription(message);
 
         if (!message.getType().equals("message"))
-            responseHandler.handleServerResponse((FeedbackPayload) message.getPayload());
+            responseHandler.addNewResponse((FeedbackPayload) message.getPayload());
     }
 
 
@@ -87,8 +88,13 @@ public class ServerListenerThread extends Thread {
             Message message = mapper.readValue(receivedMessage, Message.class);
 
             Set<ConstraintViolation<Message>> violations = Validator.validateJsonObject(message);
-            if (violations == null || !violations.isEmpty())
+            if (violations == null)
                 return null;
+
+            if (!violations.isEmpty()) {
+                violations.forEach(messageConstraintViolation -> System.out.println(messageConstraintViolation.getMessage()));
+                return null;
+            }
 
             return message;
         } catch (JsonProcessingException e) {
@@ -127,7 +133,7 @@ public class ServerListenerThread extends Thread {
         Thread thread = new Thread(() -> {
             try {
                 while (true) {
-                    String message = receivedMessagesQueue.poll();
+                    String message = responseQueue.poll();
                     if (message == null) {
                         Thread.sleep(1);
                         continue;
@@ -157,21 +163,5 @@ public class ServerListenerThread extends Thread {
             e.printStackTrace();
         }
     }
-
-
-    /* STATUS */
-
-
-    private boolean runAction(Message message) {
-        String key = Objects.equals(message.getType(), "message") ? message.getTopic() : message.getType();
-
-        Consumer<Message> callback = getCallback(key);
-        if (callback == null)
-            return false;
-
-        callback.accept(message);
-        return true;
-    }
-
 
 }
