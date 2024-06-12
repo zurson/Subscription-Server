@@ -86,7 +86,6 @@ public class CommunicationThread extends Thread {
     private ClientThread spawnClientThread(Socket clientSocket) throws IOException {
         ClientThread clientThread = new ClientThread(clientsListDriver, receiveDriver, topicsDriver, serverController, clientSocket);
         Thread thread = new Thread(clientThread);
-//        thread.setDaemon(true);
         thread.start();
 
         return clientThread;
