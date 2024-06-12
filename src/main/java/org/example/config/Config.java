@@ -6,17 +6,29 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.Objects;
+
 @NoArgsConstructor
 @AllArgsConstructor
 @Data
 public class Config {
 
-    @JsonProperty("serverId")
+    @JsonProperty("ServerId")
     private String serverId;
 
+    @JsonProperty("ListenAddresses")
+    private String listenAddresses;
 
-    @Override
-    public String toString() {
-        return "serverId: " + serverId;
+    @JsonProperty("ListenPort")
+    private int listenPort;
+
+    @JsonProperty("TimeOut")
+    private int timeOut;
+
+    public String getListenAddresses() {
+        if (Objects.equals(listenAddresses, "*"))
+            return "0.0.0.0";
+
+        return listenAddresses;
     }
 }

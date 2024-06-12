@@ -28,19 +28,23 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
     private final ReceivedMessagesQueue<ReceivedMessage> receivedMessagesQueue;    // KKO
 
 
-    public Server(String hostname, int port, int timeout) throws IOException, ValidationException {
+    public Server(Config config) throws IOException, ValidationException {
+        int port = config.getListenPort();
+        String listenAddresses = config.getListenAddresses();
+        int timeout = config.getTimeOut();
+
         if (!Validator.isValidPort(port))
             throw new ValidationException("Invalid port");
 
-        if (!Validator.isValidIPv4Address(hostname))
-            throw new ValidationException("Invalid hostname");
+        if (!Validator.isValidIPv4Address(listenAddresses))
+            throw new ValidationException("Invalid listen address");
 
         if (!Validator.isValidTimeout(timeout))
             throw new ValidationException("Invalid timeout value");
 
         this.config = new ConfigLoader().loadConfig();
 
-        this.communicationThread = new CommunicationThread(this, this, this, this, hostname, port, timeout);
+        this.communicationThread = new CommunicationThread(this, this, this, this, listenAddresses, port, timeout);
         this.receivedMessagesQueueMonitorThread = new ReceivedMessagesQueueMonitorThread(this, this, this);
         this.uiThread = new UIThread(this);
 

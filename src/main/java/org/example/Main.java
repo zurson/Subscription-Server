@@ -1,5 +1,7 @@
 package org.example;
 
+import org.example.config.Config;
+import org.example.config.ConfigLoader;
 import org.example.server.Server;
 
 public class Main {
@@ -7,7 +9,10 @@ public class Main {
     public static void main(String[] args) {
 
         try {
-            Server server = new Server("0.0.0.0", 7, 3000);
+            ConfigLoader configLoader = new ConfigLoader();
+            Config config = configLoader.loadConfig();
+
+            Server server = new Server(config);
 
             Thread thread = new Thread(server);
             thread.start();

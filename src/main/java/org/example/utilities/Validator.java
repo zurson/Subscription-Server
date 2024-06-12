@@ -18,6 +18,12 @@ public class Validator {
 
 
     public static boolean isValidIPv4Address(String ip) {
+        if (ip == null || ip.isEmpty())
+            return false;
+
+        if (ip.equals("localhost"))
+            return true;
+
         String ipv4Pattern = "^(([0-9]{1,2}|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]{1,2}|1[0-9]{2}|2[0-4][0-9]|25[0-5])$";
 
         Pattern ipv4 = Pattern.compile(ipv4Pattern);
@@ -45,7 +51,7 @@ public class Validator {
         return validator.validate(object);
     }
 
-    public static  <T> Optional<String> validatePayload(T payload, Class<T> payloadClass) {
+    public static <T> Optional<String> validatePayload(T payload, Class<T> payloadClass) {
         if (payload == null)
             return Optional.of("Payload is null");
 
