@@ -1,6 +1,7 @@
 package org.example.server;
 
 import org.example.client.ClientThread;
+import org.example.config.Config;
 import org.example.interfaces.ServerController;
 import org.example.server.topics.TopicData;
 
@@ -82,6 +83,16 @@ public class UIThread extends Thread {
                 yield true;
             }
 
+            case "server" -> {
+                showServerDetails();
+                yield true;
+            }
+
+            case "stop" -> {
+                stopServer();
+                yield true;
+            }
+
             default -> false;
         };
     }
@@ -139,6 +150,33 @@ public class UIThread extends Thread {
         sb.append(headerAndFooter);
 
         System.out.println(sb);
+    }
+
+
+    /* DETAILS */
+
+
+    private void showServerDetails() {
+        StringBuilder sb = new StringBuilder();
+        Config serverConfig = serverController.getServerConfig();
+
+        String headerAndFooter = "---------- [SERVER DETAILS] ----------";
+        sb.append(headerAndFooter).append("\n");
+
+        sb.append("Port: ").append(serverConfig.getListenPort()).append("\n");
+        sb.append("ListenAddresses: ").append(serverConfig.getListenAddresses()).append("\n");
+
+        sb.append(headerAndFooter);
+
+        System.out.println(sb);
+    }
+
+
+    /* STOP */
+
+
+    private void stopServer() {
+        serverController.stopServer();
     }
 
 }

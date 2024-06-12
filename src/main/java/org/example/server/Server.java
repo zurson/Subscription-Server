@@ -64,15 +64,6 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
     }
 
 
-    public void stopServer() {
-        clientList.forEach(ClientThread::stopThread);
-
-        uiThread.stopThread();
-        communicationThread.stopThread();
-        receivedMessagesQueueMonitorThread.stopThread();
-    }
-
-
     private AddElementCallback getAddElementCallback() {
         return () -> {
             Notification notification = messagesToSendQueue.poll();
@@ -315,8 +306,29 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
         return registeredTopics;
     }
 
+
     @Override
     public List<ClientThread> getConnectedClients() {
         return new ArrayList<>(clientList);
+    }
+
+
+    @Override
+    public Config getServerConfig() {
+        return new Config(
+                config.getServerId(),
+                config.getListenAddresses(),
+                config.getListenPort(),
+                config.getTimeOut()
+        );
+    }
+
+
+    public void stopServer() {
+        clientList.forEach(ClientThread::stopThread);
+
+        uiThread.stopThread();
+        communicationThread.stopThread();
+        receivedMessagesQueueMonitorThread.stopThread();
     }
 }

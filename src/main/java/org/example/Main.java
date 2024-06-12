@@ -16,12 +16,6 @@ public class Main {
             Thread thread = new Thread(server);
             thread.start();
 
-            Thread.sleep(5000);
-            server.stopServer();
-
-
-
-//            thread.join();
 
         } catch (Exception e) {
             e.printStackTrace();
