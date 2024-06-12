@@ -17,11 +17,14 @@ public class MessageResponse {
     private Set<ClientThread> recipients;
     private boolean success;
 
+    private String error;
 
-    public MessageResponse(String content, List<ClientThread> recipients, boolean success) {
+
+    public MessageResponse(String content, List<ClientThread> recipients, boolean success, String error) {
         this.content = content;
         this.recipients = new HashSet<>(recipients);
         this.success = success;
+        this.error = error;
     }
 
 

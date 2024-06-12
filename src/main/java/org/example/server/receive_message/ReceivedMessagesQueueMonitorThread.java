@@ -113,8 +113,16 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
             case "message":
                 MessageResponse response = message(client, message);
 
-                payload = createFeedbackPayload(response.isSuccess(), response.getContent());
-                recipients = response.getRecipients();
+                if (!response.isSuccess()) {
+                    payload = createFeedbackPayload(false, response.getError());
+                    recipients.add(client);
+                    break;
+                } else {
+                    payload = createFeedbackPayload(false, "Sent to " + response.getRecipients().size() + " subscribers");
+                    recipients.add(client);
+                }
+
+                addMessageToQueue(response.getContent(), response.getRecipients());
                 break;
 
             case "withdraw":
@@ -334,7 +342,7 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
         Optional<String> validationError = validateMessage(client, message);
 
         if (validationError.isPresent())
-            return new MessageResponse(validationError.get(), Collections.singletonList(client), false);
+            return new MessageResponse(null, Collections.singletonList(client), false, validationError.get());
 
         try {
             TopicData topicData = topicsDriver.getTopic(message.getTopic());
@@ -342,12 +350,11 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
             content = removeTypeFromPayload(content);
 
             List<ClientThread> recipients = new ArrayList<>(topicData.getSubscribers());
-            recipients.add(client);
 
-            return new MessageResponse(content, recipients, true);
+            return new MessageResponse(content, recipients, true, null);
         } catch (JsonProcessingException e) {
             e.printStackTrace();
-            return new MessageResponse("Unexpected error", Collections.singletonList(client), false);
+            return new MessageResponse(null, Collections.singletonList(client), false, "Unexpected error");
         }
     }
 
