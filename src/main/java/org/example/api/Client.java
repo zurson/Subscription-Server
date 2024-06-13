@@ -362,6 +362,30 @@ public class Client implements ICallbackDriver, IResponseHandler {
     }
 
 
+    /* FILE */
+
+
+    public void sendFile(String topicName, String filepath) throws IOException, SizeLimitException {
+        if (!isConnected())
+            throw new IllegalStateException("Client is not connected");
+
+        FileHandler fileHandler = new FileHandler(filepath);
+        String fileContent = fileHandler.readFile();
+        String payloadMessage = fileHandler.getFilename() + "|" + fileContent;
+
+        Message message = new Message(
+                "file",
+                clientId,
+                topicName,
+                "producer",
+                Instant.now(),
+                new MessagePayload(payloadMessage)
+        );
+
+        sendMessage(message);
+    }
+
+
     /* UTILITIES */
 
 
@@ -431,7 +455,7 @@ public class Client implements ICallbackDriver, IResponseHandler {
 
     @Override
     public void notifySubscription(Message message) {
-        if (!message.getType().equals("message"))
+        if (!message.getType().equals("message") && !message.getType().equals("file"))
             return;
 
         String topicName = message.getTopic();
