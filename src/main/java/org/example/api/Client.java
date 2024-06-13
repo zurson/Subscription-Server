@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.example.api.exceptions.ErrorResponseException;
+import org.example.api.exceptions.SizeLimitException;
 import org.example.api.exceptions.ValidationException;
 import org.example.api.threads.ServerListenerThread;
 import org.example.api.utilities.*;
@@ -65,12 +66,15 @@ public class Client implements ICallbackDriver, IResponseHandler {
     /* SEND MESSAGE */
 
 
-    private void sendMessage(Message message) throws IOException {
+    private void sendMessage(Message message) throws IOException, SizeLimitException {
         synchronized (lock) {
             String mappedMessage = mapper.writeValueAsString(message);
             byte[] messageBytes = mappedMessage.getBytes(StandardCharsets.UTF_8);
 
 //            System.err.println("Sending: " + mappedMessage);
+
+            if (serverConfig != null && messageBytes.length > serverConfig.getSizeLimit())
+                throw new SizeLimitException("Message size limit is " + serverConfig.getSizeLimit() + " your message: " + messageBytes.length);
 
             outputStream.write(messageBytes);
             outputStream.flush();
@@ -81,7 +85,7 @@ public class Client implements ICallbackDriver, IResponseHandler {
                 return;
 
             try {
-                lock.wait(5000);
+                lock.wait(2000);
             } catch (InterruptedException e) {
             }
 
@@ -98,7 +102,7 @@ public class Client implements ICallbackDriver, IResponseHandler {
     /* START */
 
 
-    public void start(String host, int port, String clientId) throws ValidationException, IOException {
+    public void start(String host, int port, String clientId) throws ValidationException, IOException, SizeLimitException {
         synchronized (configLock) {
             if (alreadyRunning())
                 throw new IllegalStateException("Client is already running");
@@ -174,7 +178,7 @@ public class Client implements ICallbackDriver, IResponseHandler {
     }
 
 
-    public void getServerStatus(Consumer<Message> callback) throws IOException {
+    public void getServerStatus(Consumer<Message> callback) throws IOException, SizeLimitException {
         if (!isConnected())
             throw new IllegalStateException("Client is not connected");
 
@@ -192,7 +196,7 @@ public class Client implements ICallbackDriver, IResponseHandler {
     }
 
 
-    public void createProducer(String topicName) throws IOException {
+    public void createProducer(String topicName) throws IOException, SizeLimitException {
         if (!isConnected())
             throw new IllegalStateException("Client is not connected");
 
@@ -210,7 +214,7 @@ public class Client implements ICallbackDriver, IResponseHandler {
     }
 
 
-    public void withdrawProducer(String topicName) throws IOException {
+    public void withdrawProducer(String topicName) throws IOException, SizeLimitException {
         if (!isConnected())
             throw new IllegalStateException("Client is not connected");
 
@@ -228,7 +232,7 @@ public class Client implements ICallbackDriver, IResponseHandler {
     }
 
 
-    public void produce(String topicName, MessagePayload payload) throws IOException {
+    public void produce(String topicName, MessagePayload payload) throws IOException, SizeLimitException {
         if (!isConnected())
             throw new IllegalStateException("Client is not connected");
 
@@ -245,7 +249,7 @@ public class Client implements ICallbackDriver, IResponseHandler {
     }
 
 
-    public void createSubscriber(String topicName, Consumer<Message> callback) throws IOException {
+    public void createSubscriber(String topicName, Consumer<Message> callback) throws IOException, SizeLimitException {
         if (!isConnected())
             throw new IllegalStateException("Client is not connected");
 
@@ -265,7 +269,7 @@ public class Client implements ICallbackDriver, IResponseHandler {
     }
 
 
-    public void withdrawSubscriber(String topicName) throws IOException {
+    public void withdrawSubscriber(String topicName) throws IOException, SizeLimitException {
         if (!isConnected())
             throw new IllegalStateException("Client is not connected");
 
@@ -297,7 +301,7 @@ public class Client implements ICallbackDriver, IResponseHandler {
     }
 
 
-    public String getStatus() throws IOException, ErrorResponseException {
+    public String getStatus() throws IOException, ErrorResponseException, SizeLimitException {
         if (!isConnected())
             throw new IllegalStateException("Client is not connected");
 
