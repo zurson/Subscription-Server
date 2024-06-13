@@ -118,7 +118,8 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
                     recipients.add(client);
                     break;
                 } else {
-                    payload = createFeedbackPayload(false, "Sent to " + response.getRecipients().size() + " subscribers");
+                    boolean success = !response.getRecipients().isEmpty();
+                    payload = createFeedbackPayload(success, "Sent to " + response.getRecipients().size() + " subscribers");
                     recipients.add(client);
                 }
 
