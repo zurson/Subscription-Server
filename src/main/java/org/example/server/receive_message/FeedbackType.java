@@ -7,7 +7,9 @@ import lombok.Getter;
 public enum FeedbackType {
 
     REJECT("reject"),
-    ACKNOWLEDGE("acknowledge");
+    ACKNOWLEDGE("acknowledge"),
+    CONFIG("config")
+    ;
 
     @Getter
     private final String value;

@@ -13,7 +13,7 @@ import java.time.Instant;
 @Data
 public class Message {
     @NotNull
-    @Pattern(regexp = "register|withdraw|message|status", message = "Unknown type")
+    @Pattern(regexp = "register|withdraw|message|status|config", message = "Unknown type")
     private String type;
 
     @NotNull(message = "senderId null")

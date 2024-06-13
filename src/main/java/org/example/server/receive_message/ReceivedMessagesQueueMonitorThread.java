@@ -6,9 +6,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.example.client.ClientThread;
+import org.example.config.Config;
 import org.example.interfaces.MessagesQueueDriver;
 import org.example.interfaces.ServerController;
 import org.example.interfaces.TopicsDriver;
+import org.example.server.receive_message.config.ConfigPayload;
+import org.example.server.receive_message.config.ConfigResponse;
 import org.example.server.receive_message.message.MessagePayload;
 import org.example.server.receive_message.message.MessageResponse;
 import org.example.server.receive_message.register.RegisterPayload;
@@ -24,6 +27,7 @@ import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.example.server.receive_message.FeedbackType.CONFIG;
 import static org.example.server.receive_message.FeedbackType.REJECT;
 import static org.example.settings.Settings.QUEUE_CHECK_INTERVAL_MS;
 
@@ -96,7 +100,7 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
             return false;
         }
 
-        FeedbackPayload payload;
+        FeedbackPayload payload = null;
         List<ClientThread> recipients = new ArrayList<>();
 
         switch (message.getType()) {
@@ -128,6 +132,19 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
 
             case "withdraw":
                 payload = withdraw(client, message);
+                recipients.add(client);
+                break;
+
+            case "config":
+                ConfigResponse configResponse = config(message);
+                if (!configResponse.isSuccess()) {
+                    payload = createFeedbackPayload(false, "Config unexpected error");
+                    recipients.add(client);
+                    break;
+                }
+
+                payload = createFeedbackPayload(true, configResponse.getConfig());
+                payload.setType(CONFIG.getValue());
                 recipients.add(client);
                 break;
 
@@ -411,6 +428,33 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
         }
 
         return createFeedbackPayload(false, "You have nothing in common with given topic");
+    }
+
+
+
+    /* CONFIG */
+
+    private ConfigResponse config(Message message) {
+        ConfigPayload payload = (ConfigPayload) message.getPayload();
+
+        Optional<String> errorMessage = Validator.validatePayload(payload, ConfigPayload.class);
+        if (errorMessage.isPresent())
+            return new ConfigResponse(errorMessage.get(), false);
+
+        try {
+            Config config = serverController.getServerConfig();
+            String configJson = mapper.writeValueAsString(config);
+            return new ConfigResponse(configJson, true);
+
+//            message.setPayload(configResponse);
+//            String responseJson = mapper.writeValueAsString(message);
+//            configResponse.setConfig(responseJson);
+//
+//            return configResponse;
+        } catch (JsonProcessingException e) {
+            e.printStackTrace();
+            return new ConfigResponse("Unexpected error", false);
+        }
     }
 
 }
