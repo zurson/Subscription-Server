@@ -1,11 +1,15 @@
 package org.example.server.receive_message;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Pattern;
 import java.time.Instant;
 
+@AllArgsConstructor
+@NoArgsConstructor
 @Data
 public class Message {
     @NotNull

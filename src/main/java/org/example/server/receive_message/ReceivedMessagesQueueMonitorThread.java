@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.example.server.receive_message.FeedbackType.REJECT;
 import static org.example.settings.Settings.QUEUE_CHECK_INTERVAL_MS;
 
 public class ReceivedMessagesQueueMonitorThread extends Thread {
@@ -95,7 +96,7 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
             return false;
         }
 
-        Payload payload;
+        FeedbackPayload payload;
         List<ClientThread> recipients = new ArrayList<>();
 
         switch (message.getType()) {
@@ -112,8 +113,17 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
             case "message":
                 MessageResponse response = message(client, message);
 
-                payload = createFeedbackPayload(response.isSuccess(), response.getContent());
-                recipients = response.getRecipients();
+                if (!response.isSuccess()) {
+                    payload = createFeedbackPayload(false, response.getError());
+                    recipients.add(client);
+                    break;
+                } else {
+                    boolean success = !response.getRecipients().isEmpty();
+                    payload = createFeedbackPayload(success, "Sent to " + response.getRecipients().size() + " subscribers");
+                    recipients.add(client);
+                }
+
+                addMessageToQueue(response.getContent(), response.getRecipients());
                 break;
 
             case "withdraw":
@@ -133,10 +143,16 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
         try {
             client.setClientId(message.getSenderId());
 
-            message.setPayload(payload);
-            String mappedFeedback = mapper.writeValueAsString(message);
+            payload.setTimestampOfMessage(message.getTimestamp());
+            payload.setTopicOfMessage(message.getTopic());
 
+            message.setType(payload.getType());
+            message.setPayload(payload);
+            message.setSenderId(serverController.getServerConfig().getServerId());
+
+            String mappedFeedback = mapper.writeValueAsString(message);
             addMessageToQueue(mappedFeedback, recipients);
+
             return true;
         } catch (JsonProcessingException e) {
             e.printStackTrace();
@@ -161,6 +177,7 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
 
             return message;
         } catch (JsonProcessingException e) {
+            e.printStackTrace();
             return null;
         }
 
@@ -217,7 +234,14 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
             return;
 
         try {
+            FeedbackPayload feedbackPayload = createFeedbackPayload(false, error);
+            feedbackPayload.setTimestampOfMessage(message.getTimestamp());
+            feedbackPayload.setTopicOfMessage(message.getTopic());
+
+            message.setType(feedbackPayload.getType());
             message.setPayload(createFeedbackPayload(false, error));
+            message.setSenderId(serverController.getServerConfig().getServerId());
+
             addMessageToQueue(mapper.writeValueAsString(message), recipient);
         } catch (JsonProcessingException e) {
             e.printStackTrace();
@@ -237,6 +261,10 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
 
     private FeedbackPayload createFeedbackPayload(boolean success, String message) {
         FeedbackPayload feedbackPayload = new FeedbackPayload();
+
+        FeedbackType feedbackType = success ? FeedbackType.ACKNOWLEDGE : REJECT;
+        feedbackPayload.setType(feedbackType.getValue());
+
         feedbackPayload.setSuccess(success);
         feedbackPayload.setMessage(message);
         return feedbackPayload;
@@ -315,7 +343,7 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
         Optional<String> validationError = validateMessage(client, message);
 
         if (validationError.isPresent())
-            return new MessageResponse(validationError.get(), Collections.singletonList(client), false);
+            return new MessageResponse(null, Collections.singletonList(client), false, validationError.get());
 
         try {
             TopicData topicData = topicsDriver.getTopic(message.getTopic());
@@ -323,12 +351,11 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
             content = removeTypeFromPayload(content);
 
             List<ClientThread> recipients = new ArrayList<>(topicData.getSubscribers());
-            recipients.add(client);
 
-            return new MessageResponse(content, recipients, true);
+            return new MessageResponse(content, recipients, true, null);
         } catch (JsonProcessingException e) {
             e.printStackTrace();
-            return new MessageResponse("Unexpected error", Collections.singletonList(client), false);
+            return new MessageResponse(null, Collections.singletonList(client), false, "Unexpected error");
         }
     }
 

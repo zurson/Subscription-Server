@@ -54,6 +54,8 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
         this.registeredTopics = Collections.synchronizedMap(new HashMap<>());
         this.messagesToSendQueue = new MessagesToSendQueue(getAddElementCallback());
         this.receivedMessagesQueue = new ReceivedMessagesQueue<>();
+
+        registerSpecialLogsTopic();
     }
 
 
@@ -77,6 +79,13 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
                 }
             }
         };
+    }
+
+
+    private void registerSpecialLogsTopic() {
+
+        ClientThread server = new ClientThread(config.getServerId());
+        addTopic("logs", new TopicData(server));
     }
 
 
