@@ -1,6 +1,7 @@
 package org.example.server;
 
 import org.example.client.ClientThread;
+import org.example.config.Config;
 import org.example.interfaces.ClientsListDriver;
 import org.example.interfaces.ReceiveDriver;
 import org.example.interfaces.ServerController;
@@ -8,28 +9,35 @@ import org.example.interfaces.TopicsDriver;
 
 import java.io.IOException;
 import java.net.*;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class CommunicationThread extends Thread {
 
     private final int port;
     private final String listenAddresses;
+    private final int timeout;
+    private final int sizeLimit;
+    private final List<String> allowedIPAddresses;
+
     private final ServerSocket serverSocket;
     private final ClientsListDriver clientsListDriver;
     private final ReceiveDriver receiveDriver;
     private final TopicsDriver topicsDriver;
     private final ServerController serverController;
     private final AtomicBoolean running;
-    private final int timeout;
 
-    public CommunicationThread(ClientsListDriver clientsListDriver, ReceiveDriver receiveDriver, TopicsDriver topicsDriver, ServerController serverController, String listenAddresses, int port, int timeout) throws IOException {
-        this.listenAddresses = listenAddresses;
-        this.port = port;
+    public CommunicationThread(ClientsListDriver clientsListDriver, ReceiveDriver receiveDriver, TopicsDriver topicsDriver, ServerController serverController, Config config) throws IOException {
+        this.listenAddresses = config.getListenAddresses();
+        this.port = config.getListenPort();
+        this.timeout = config.getTimeOut();
+        this.sizeLimit = config.getSizeLimit();
+        this.allowedIPAddresses = config.getAllowedIPAddresses();
+
         this.clientsListDriver = clientsListDriver;
         this.receiveDriver = receiveDriver;
         this.topicsDriver = topicsDriver;
         this.serverController = serverController;
-        this.timeout = timeout;
 
         this.running = new AtomicBoolean(false);
 
@@ -60,6 +68,7 @@ public class CommunicationThread extends Thread {
             try {
                 clientSocket = acceptConnection();
                 System.out.println("New client: " + clientSocket.getInetAddress() + ":" + clientSocket.getPort());
+
             } catch (SocketTimeoutException ignored) {
                 continue;
             } catch (IOException e) {

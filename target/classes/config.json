@@ -2,5 +2,7 @@
   "ServerId": "server-123",
   "ListenAddresses": "*",
   "ListenPort": 7,
-  "TimeOut": 3000
+  "TimeOut": 3000,
+  "AllowedIPAddresses":  ["10.0.0.0/24", "192.168.1.0/24", "any"],
+  "SizeLimit": 1000
 }
