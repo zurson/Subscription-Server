@@ -8,6 +8,7 @@ import org.example.api.exceptions.ErrorResponseException;
 import org.example.api.exceptions.ValidationException;
 import org.example.api.threads.ServerListenerThread;
 import org.example.api.utilities.*;
+import org.example.api.utilities.config.Config;
 import org.example.api.utilities.payload.FeedbackPayload;
 import org.example.api.utilities.payload.MessagePayload;
 import org.example.api.utilities.payload.Payload;
@@ -32,6 +33,9 @@ public class Client implements ICallbackDriver, IResponseHandler {
 
     private final Object lock = new Object();
     private FeedbackPayload selfStatusPayload;
+
+    private Config serverConfig;
+    private final Object configLock = new Object();
 
     private final Map<String, Consumer<Message>> callbacks;
     private final ServerResponsesQueue<ServerResponse> serverResponses;
@@ -95,15 +99,28 @@ public class Client implements ICallbackDriver, IResponseHandler {
 
 
     public void start(String host, int port, String clientId) throws ValidationException, IOException {
-        if (alreadyRunning())
-            throw new IllegalStateException("Client is already running");
+        synchronized (configLock) {
+            if (alreadyRunning())
+                throw new IllegalStateException("Client is already running");
 
-        validateStartParameters(host, port, clientId);
-        this.clientId = clientId;
+            validateStartParameters(host, port, clientId);
+            this.clientId = clientId;
 
-        connectToServer(host, port);
-        outputStream = new DataOutputStream(clientSocket.getOutputStream());
-        startServerListenerThread();
+            connectToServer(host, port);
+            outputStream = new DataOutputStream(clientSocket.getOutputStream());
+            startServerListenerThread();
+
+            sendMessage(getConfigMessage());
+
+            try {
+                configLock.wait(5000);
+            } catch (InterruptedException e) {
+            }
+
+            if (serverConfig == null)
+                throw new RuntimeException("Unable to get server config");
+
+        }
     }
 
 
@@ -133,6 +150,19 @@ public class Client implements ICallbackDriver, IResponseHandler {
     private void startServerListenerThread() throws IOException {
         serverListenerThread = new ServerListenerThread(clientSocket, this, this);
         serverListenerThread.start();
+    }
+
+
+    private Message getConfigMessage() {
+        return new Message(
+                "config",
+                clientId,
+                "config",
+                "producer",
+                Instant.now(),
+                new Payload() {
+                }
+        );
     }
 
 
@@ -374,7 +404,14 @@ public class Client implements ICallbackDriver, IResponseHandler {
     @Override
     public void addNewResponse(FeedbackPayload feedbackPayload) {
         serverResponses.add(new ServerResponse(feedbackPayload.getTimestampOfMessage(), feedbackPayload));
-//        System.out.println("Server Response: " + feedbackPayload.getMessage());
+//        System.out.println("Server Response: " + feedbackPayload);
+
+        try {
+            mapJsonToClass(feedbackPayload.getMessage(), Config.class);
+            setConfig(feedbackPayload);
+            return;
+        } catch (IOException ignored) {
+        }
 
         synchronized (lock) {
             try {
@@ -400,6 +437,19 @@ public class Client implements ICallbackDriver, IResponseHandler {
             return;
 
         callback.accept(message);
+    }
+
+
+    public void setConfig(FeedbackPayload feedbackPayload) {
+        synchronized (configLock) {
+            try {
+                serverConfig = mapJsonToClass(feedbackPayload.getMessage(), Config.class);
+                System.out.println("Server config loaded");
+                configLock.notify();
+            } catch (IOException e) {
+                throw new RuntimeException("Config mapping error");
+            }
+        }
     }
 
 
