@@ -112,6 +112,7 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
 
             case "status":
                 payload = status(message);
+                payload.setType("status");
                 recipients.add(client);
                 break;
 
