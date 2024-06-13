@@ -33,7 +33,7 @@ import static org.example.api.settings.Settings.SERVER_CONNECTION_TIMEOUT_MS;
 public class Client implements ICallbackDriver, IResponseHandler {
 
     private final Object lock = new Object();
-    private FeedbackPayload selfStatusPayload;
+    private FeedbackPayload statusPayload;
 
     private Config serverConfig;
     private final Object configLock = new Object();
@@ -89,10 +89,10 @@ public class Client implements ICallbackDriver, IResponseHandler {
             } catch (InterruptedException e) {
             }
 
-            if (selfStatusPayload == null) {
-                selfStatusPayload = new FeedbackPayload();
-                selfStatusPayload.setMessage("Time expired");
-                selfStatusPayload.setSuccess(false);
+            if (statusPayload == null) {
+                statusPayload = new FeedbackPayload();
+                statusPayload.setMessage("Time expired");
+                statusPayload.setSuccess(false);
             }
 
         }
@@ -178,14 +178,14 @@ public class Client implements ICallbackDriver, IResponseHandler {
     }
 
 
-    public void getServerStatus(Consumer<Message> callback) throws IOException, SizeLimitException {
+    public void getServerStatus(Consumer<StatusResponse> callback) throws IOException, SizeLimitException, ErrorResponseException {
         if (!isConnected())
             throw new IllegalStateException("Client is not connected");
 
         Message message = new Message(
                 "status",
                 clientId,
-                "logs",
+                "status",
                 "producer",
                 Instant.now(),
                 new Payload() {
@@ -193,6 +193,15 @@ public class Client implements ICallbackDriver, IResponseHandler {
         );
 
         sendMessage(message);
+
+        if (!statusPayload.isSuccess())
+            throw new ErrorResponseException(statusPayload.getMessage());
+
+        String json = preparePayloadForStatusesConversion(statusPayload.getMessage());
+        StatusResponse statusResponse = mapJsonToClass(json, StatusResponse.class);
+
+        callback.accept(statusResponse);
+        statusPayload = null;
     }
 
 
@@ -308,27 +317,24 @@ public class Client implements ICallbackDriver, IResponseHandler {
         Message message = new Message(
                 "status",
                 clientId,
-                "logs",
+                "status",
                 "producer",
                 Instant.now(),
                 new Payload() {
                 }
         );
 
-        /*FeedbackPayload response = */
-
         sendMessage(message);
 
+        if (!statusPayload.isSuccess())
+            throw new ErrorResponseException(statusPayload.getMessage());
 
-        if (!selfStatusPayload.isSuccess())
-            throw new ErrorResponseException(selfStatusPayload.getMessage());
-
-        String json = preparePayloadForStatusesConversion(selfStatusPayload.getMessage());
+        String json = preparePayloadForStatusesConversion(statusPayload.getMessage());
         StatusResponse statusResponse = mapJsonToClass(json, StatusResponse.class);
 
         ClientTopics clientTopics = getClientTopics(statusResponse);
 
-        selfStatusPayload = null;
+        statusPayload = null;
         return convertToJson(clientTopics);
     }
 
@@ -445,7 +451,7 @@ public class Client implements ICallbackDriver, IResponseHandler {
             try {
                 String json = preparePayloadForStatusesConversion(feedbackPayload.getMessage());
                 mapJsonToClass(json, StatusResponse.class);
-                selfStatusPayload = feedbackPayload;
+                statusPayload = feedbackPayload;
                 lock.notify();
             } catch (IOException ignored) {
             }

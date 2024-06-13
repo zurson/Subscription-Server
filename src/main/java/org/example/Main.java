@@ -27,28 +27,30 @@ public class Main {
 
             client.createProducer(topicName);
 
-            client.createSubscriber(topicName, message -> {
-                try {
-                    Thread.sleep(5000);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-                try {
-                    handleSubscriptionMessage(topicName, message);
-                } catch (IOException e) {
-                    System.err.println(e.getMessage());
-                }
+//            client.createSubscriber(topicName, message -> {
+//                try {
+//                    handleSubscriptionMessage(topicName, message);
+//                } catch (IOException e) {
+//                    System.err.println(e.getMessage());
+//                }
+//            });
+
+
+            System.out.println("Client STATUS: " + client.getStatus());
+
+            client.getServerStatus(statuses -> {
+                System.out.println("\nServer STATUS: " + statuses);
             });
 
-            int counter = 0;
-            while (counter < 10) {
-//                client.produce(topicName, new MessagePayload("Bike is waiting!"));
-                client.sendFile(topicName, "example.txt");
-                counter++;
-                Thread.sleep(3000);
-            }
 
-            client.withdrawProducer(topicName);
+//            int counter = 0;
+//            while (counter++ < 3) {
+//                client.produce(topicName, new MessagePayload("Bike is waiting!"));
+//                client.sendFile(topicName, "example.txt");
+//                Thread.sleep(3000);
+//            }
+//
+//            client.withdrawProducer(topicName);
 
 
 //            client.createSubscriber(topicName + "y", message -> {
@@ -60,12 +62,7 @@ public class Main {
 //            client.produce(topicName, new MessagePayload("produce for normal"));
 //            client.produce(topicName + "y", new MessagePayload("produce for y"));
 
-//            System.out.println("STATUS: " + client.getStatus());
 
-//            client.getServerStatus(message -> {
-//                System.out.println("\nSTATUS:");
-//                System.out.println(message);
-//            });
 
 //            client.stop();
 
