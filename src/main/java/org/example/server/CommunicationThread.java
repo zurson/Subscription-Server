@@ -1,5 +1,6 @@
 package org.example.server;
 
+import org.apache.commons.net.util.SubnetUtils;
 import org.example.client.ClientThread;
 import org.example.config.Config;
 import org.example.interfaces.ClientsListDriver;
@@ -67,7 +68,13 @@ public class CommunicationThread extends Thread {
 
             try {
                 clientSocket = acceptConnection();
-                System.out.println("New client: " + clientSocket.getInetAddress() + ":" + clientSocket.getPort());
+                System.out.println("New client: " + clientSocket.getRemoteSocketAddress());
+
+                if (!isAllowedIPAddress(clientSocket)) {
+                    System.out.println("IP address not allowed: " + clientSocket.getRemoteSocketAddress());
+                    clientSocket.close();
+                    continue;
+                }
 
             } catch (SocketTimeoutException ignored) {
                 continue;
@@ -91,6 +98,31 @@ public class CommunicationThread extends Thread {
 
     private Socket acceptConnection() throws IOException {
         return serverSocket.accept();
+    }
+
+
+    private boolean isAllowedIPAddress(Socket clientSocket) {
+        if (allowedIPAddresses.isEmpty())
+            return true;
+
+        String clientIP = clientSocket.getInetAddress().getHostAddress();
+
+        for (String cidr : allowedIPAddresses) {
+            if (isIPInCIDR(clientIP, cidr))
+                return true;
+        }
+        return false;
+    }
+
+
+    private boolean isIPInCIDR(String ip, String cidr) {
+        try {
+            SubnetUtils subnetUtils = new SubnetUtils(cidr);
+            SubnetUtils.SubnetInfo subnetInfo = subnetUtils.getInfo();
+            return subnetInfo.isInRange(ip);
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 
 

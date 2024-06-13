@@ -19,7 +19,6 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.example.settings.Settings.CLIENT_NOT_CONNECTED_MSG;
-import static org.example.settings.Settings.MAX_TRANSFER_BYTES;
 
 
 public class ClientThread extends Thread {
@@ -38,9 +37,11 @@ public class ClientThread extends Thread {
     private TopicsDriver topicsDriver;
     private ServerController serverController;
     private AtomicBoolean running;
+    private int sizeLimit;
 
 
-    public ClientThread(ClientsListDriver clientsListDriver, ReceiveDriver receiveDriver, TopicsDriver topicsDriver, ServerController serverController, Socket clientSocket) throws IOException {
+    public ClientThread(ClientsListDriver clientsListDriver, ReceiveDriver receiveDriver, TopicsDriver topicsDriver,
+                        ServerController serverController, Socket clientSocket, int sizeLimit) throws IOException {
         if (clientSocket == null || clientSocket.isClosed())
             throw new IOException("Socket null or closed");
 
@@ -49,6 +50,8 @@ public class ClientThread extends Thread {
         this.clientSocket = clientSocket;
         this.topicsDriver = topicsDriver;
         this.serverController = serverController;
+
+        this.sizeLimit = sizeLimit;
 
         this.running = new AtomicBoolean(false);
         this.outputStream = new DataOutputStream(this.clientSocket.getOutputStream());
@@ -67,7 +70,7 @@ public class ClientThread extends Thread {
 
         while (running.get()) {
             try {
-                String recvMessage = recvMessage();
+                String recvMessage = receiveMessage();
                 receiveDriver.addNewMessage(new ReceivedMessage(recvMessage, this));
             } catch (SocketTimeoutException e) {
                 if (actionRequest)
@@ -113,24 +116,17 @@ public class ClientThread extends Thread {
     }
 
 
-    public String recvMessage() throws IOException {
+    public String receiveMessage() throws IOException {
         if (clientSocket == null || !clientSocket.isConnected())
             throw new IOException(CLIENT_NOT_CONNECTED_MSG);
 
-        byte[] bytes = new byte[MAX_TRANSFER_BYTES];
+        byte[] bytes = new byte[sizeLimit];
         int bytesRead = inputStream.read(bytes);
 
         if (bytesRead == -1)
             throw new IOException("Client communication error");
 
-        String recvMessage;
-        try {
-            recvMessage = new String(bytes, 0, bytesRead);
-        } catch (IndexOutOfBoundsException e) {
-            throw new IOException(e);
-        }
-
-        return recvMessage;
+        return new String(bytes, 0, bytesRead);
     }
 
 
