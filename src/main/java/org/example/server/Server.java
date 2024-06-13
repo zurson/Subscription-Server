@@ -31,22 +31,10 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
 
 
     public Server(Config config) throws IOException, ValidationException {
-        int port = config.getListenPort();
-        String listenAddresses = config.getListenAddresses();
-        int timeout = config.getTimeOut();
-
-        if (!Validator.isValidPort(port))
-            throw new ValidationException("Invalid port");
-
-        if (!Validator.isValidIPv4Address(listenAddresses))
-            throw new ValidationException("Invalid listen address");
-
-        if (!Validator.isValidTimeout(timeout))
-            throw new ValidationException("Invalid timeout value");
-
         this.config = new ConfigLoader().loadConfig();
+        validateConfig();
 
-        this.communicationThread = new CommunicationThread(this, this, this, this, listenAddresses, port, timeout);
+        this.communicationThread = new CommunicationThread(this, this, this, this, config);
         this.receivedMessagesQueueMonitorThread = new ReceivedMessagesQueueMonitorThread(this, this, this);
         this.uiThread = new UIThread(this);
 
@@ -56,6 +44,30 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
         this.receivedMessagesQueue = new ReceivedMessagesQueue<>();
 
         registerSpecialLogsTopic();
+    }
+
+
+    private void validateConfig() throws ValidationException {
+        int port = config.getListenPort();
+        int timeout = config.getTimeOut();
+        int sizeLimit = config.getSizeLimit();
+        String listenAddresses = config.getListenAddresses();
+        List<String> allowedIPAddresses = config.getAllowedIPAddresses();
+
+        if (!Validator.isValidPort(port))
+            throw new ValidationException("Invalid port");
+
+        if (!Validator.isValidIPAddress(listenAddresses))
+            throw new ValidationException("Invalid listen address");
+
+        if (!Validator.isValidTimeout(timeout))
+            throw new ValidationException("Invalid timeout value");
+
+        if (!Validator.isValidSizeLimit(sizeLimit))
+            throw new ValidationException("Invalid size limit");
+
+        if (!Validator.validateCIDRList(allowedIPAddresses))
+            throw new ValidationException("Invalid allowed ip addresses");
     }
 
 
@@ -328,7 +340,9 @@ public class Server implements Runnable, ClientsListDriver, ReceiveDriver, Messa
                 config.getServerId(),
                 config.getListenAddresses(),
                 config.getListenPort(),
-                config.getTimeOut()
+                config.getTimeOut(),
+                config.getSizeLimit(),
+                config.getAllowedIPAddresses()
         );
     }
 
