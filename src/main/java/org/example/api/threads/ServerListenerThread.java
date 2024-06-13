@@ -64,7 +64,7 @@ public class ServerListenerThread extends Thread {
 
 
     private void manageMessage(String receivedMessage) {
-        System.err.println("RECEIVED: " + receivedMessage);
+//        System.err.println("RECEIVED: " + receivedMessage);
         Message message = mapReceivedMessage(receivedMessage);
 
         if (message == null) {
