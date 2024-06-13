@@ -27,13 +27,13 @@ public class Main {
 
             client.createProducer(topicName);
 
-//            client.createSubscriber(topicName, message -> {
-//                try {
-//                    handleSubscriptionMessage(topicName, message);
-//                } catch (IOException e) {
-//                    System.err.println(e.getMessage());
-//                }
-//            });
+            client.createSubscriber(topicName, message -> {
+                try {
+                    handleSubscriptionMessage(topicName, message);
+                } catch (IOException e) {
+                    System.err.println(e.getMessage());
+                }
+            });
 
 
             System.out.println("Client STATUS: " + client.getStatus());
@@ -43,13 +43,15 @@ public class Main {
             });
 
 
-//            int counter = 0;
-//            while (counter++ < 3) {
-//                client.produce(topicName, new MessagePayload("Bike is waiting!"));
-//                client.sendFile(topicName, "example.txt");
-//                Thread.sleep(3000);
-//            }
-//
+            int counter = 0;
+            while (counter++ < 3) {
+                client.produce(topicName, new MessagePayload("Bike is waiting!"));
+                client.sendFile(topicName, "example.txt");
+                client.withdrawSubscriber(topicName);
+                System.out.println("Client STATUS: " + client.getStatus());
+                Thread.sleep(3000);
+            }
+
 //            client.withdrawProducer(topicName);
 
 
@@ -66,7 +68,6 @@ public class Main {
 
 //            client.stop();
 
-//            client.withdrawSubscriber(topicName);
 //            client.produce(topicName, new MessagePayload("produce for normal"));
 //            client.produce(topicName, new MessagePayload("produce for normal"));
 //            client.produce(topicName, new MessagePayload("produce for normal"));
