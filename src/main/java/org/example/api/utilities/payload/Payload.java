@@ -15,7 +15,9 @@ import lombok.NoArgsConstructor;
         @JsonSubTypes.Type(value = FeedbackPayload.class, name = "acknowledge"),
         @JsonSubTypes.Type(value = FeedbackPayload.class, name = "reject"),
         @JsonSubTypes.Type(value = MessagePayload.class, name = "message"),
-//        @JsonSubTypes.Type(value = FeedbackPayload.class, name = "withdraw")
+        @JsonSubTypes.Type(value = FeedbackPayload.class, name = "config"),
+        @JsonSubTypes.Type(value = MessagePayload.class, name = "file"),
+        @JsonSubTypes.Type(value = FeedbackPayload.class, name = "status")
 })
 @NoArgsConstructor
 @AllArgsConstructor

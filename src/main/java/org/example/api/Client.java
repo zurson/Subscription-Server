@@ -5,9 +5,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.example.api.exceptions.ErrorResponseException;
+import org.example.api.exceptions.SizeLimitException;
 import org.example.api.exceptions.ValidationException;
 import org.example.api.threads.ServerListenerThread;
 import org.example.api.utilities.*;
+import org.example.api.utilities.config.Config;
 import org.example.api.utilities.payload.FeedbackPayload;
 import org.example.api.utilities.payload.MessagePayload;
 import org.example.api.utilities.payload.Payload;
@@ -31,7 +33,10 @@ import static org.example.api.settings.Settings.SERVER_CONNECTION_TIMEOUT_MS;
 public class Client implements ICallbackDriver, IResponseHandler {
 
     private final Object lock = new Object();
-    private FeedbackPayload selfStatusPayload;
+    private FeedbackPayload statusPayload;
+
+    private Config serverConfig;
+    private final Object configLock = new Object();
 
     private final Map<String, Consumer<Message>> callbacks;
     private final ServerResponsesQueue<ServerResponse> serverResponses;
@@ -61,12 +66,15 @@ public class Client implements ICallbackDriver, IResponseHandler {
     /* SEND MESSAGE */
 
 
-    private void sendMessage(Message message) throws IOException {
+    private void sendMessage(Message message) throws IOException, SizeLimitException {
         synchronized (lock) {
             String mappedMessage = mapper.writeValueAsString(message);
             byte[] messageBytes = mappedMessage.getBytes(StandardCharsets.UTF_8);
 
 //            System.err.println("Sending: " + mappedMessage);
+
+            if (serverConfig != null && messageBytes.length > serverConfig.getSizeLimit())
+                throw new SizeLimitException("Message size limit is " + serverConfig.getSizeLimit() + " your message: " + messageBytes.length);
 
             outputStream.write(messageBytes);
             outputStream.flush();
@@ -77,14 +85,14 @@ public class Client implements ICallbackDriver, IResponseHandler {
                 return;
 
             try {
-                lock.wait(5000);
+                lock.wait(2000);
             } catch (InterruptedException e) {
             }
 
-            if (selfStatusPayload == null) {
-                selfStatusPayload = new FeedbackPayload();
-                selfStatusPayload.setMessage("Time expired");
-                selfStatusPayload.setSuccess(false);
+            if (statusPayload == null) {
+                statusPayload = new FeedbackPayload();
+                statusPayload.setMessage("Time expired");
+                statusPayload.setSuccess(false);
             }
 
         }
@@ -94,16 +102,29 @@ public class Client implements ICallbackDriver, IResponseHandler {
     /* START */
 
 
-    public void start(String host, int port, String clientId) throws ValidationException, IOException {
-        if (alreadyRunning())
-            throw new IllegalStateException("Client is already running");
+    public void start(String host, int port, String clientId) throws ValidationException, IOException, SizeLimitException {
+        synchronized (configLock) {
+            if (alreadyRunning())
+                throw new IllegalStateException("Client is already running");
 
-        validateStartParameters(host, port, clientId);
-        this.clientId = clientId;
+            validateStartParameters(host, port, clientId);
+            this.clientId = clientId;
 
-        connectToServer(host, port);
-        outputStream = new DataOutputStream(clientSocket.getOutputStream());
-        startServerListenerThread();
+            connectToServer(host, port);
+            outputStream = new DataOutputStream(clientSocket.getOutputStream());
+            startServerListenerThread();
+
+            sendMessage(getConfigMessage());
+
+            try {
+                configLock.wait(5000);
+            } catch (InterruptedException e) {
+            }
+
+            if (serverConfig == null)
+                throw new RuntimeException("Unable to get server config");
+
+        }
     }
 
 
@@ -136,6 +157,19 @@ public class Client implements ICallbackDriver, IResponseHandler {
     }
 
 
+    private Message getConfigMessage() {
+        return new Message(
+                "config",
+                clientId,
+                "config",
+                "producer",
+                Instant.now(),
+                new Payload() {
+                }
+        );
+    }
+
+
     /* SERVER COMMUNICATION */
 
 
@@ -144,14 +178,14 @@ public class Client implements ICallbackDriver, IResponseHandler {
     }
 
 
-    public void getServerStatus(Consumer<Message> callback) throws IOException {
+    public void getServerStatus(Consumer<StatusResponse> callback) throws IOException, SizeLimitException, ErrorResponseException {
         if (!isConnected())
             throw new IllegalStateException("Client is not connected");
 
         Message message = new Message(
                 "status",
                 clientId,
-                "logs",
+                "status",
                 "producer",
                 Instant.now(),
                 new Payload() {
@@ -159,10 +193,19 @@ public class Client implements ICallbackDriver, IResponseHandler {
         );
 
         sendMessage(message);
+
+        if (!statusPayload.isSuccess())
+            throw new ErrorResponseException(statusPayload.getMessage());
+
+        String json = preparePayloadForStatusesConversion(statusPayload.getMessage());
+        StatusResponse statusResponse = mapJsonToClass(json, StatusResponse.class);
+
+        callback.accept(statusResponse);
+        statusPayload = null;
     }
 
 
-    public void createProducer(String topicName) throws IOException {
+    public void createProducer(String topicName) throws IOException, SizeLimitException {
         if (!isConnected())
             throw new IllegalStateException("Client is not connected");
 
@@ -180,7 +223,7 @@ public class Client implements ICallbackDriver, IResponseHandler {
     }
 
 
-    public void withdrawProducer(String topicName) throws IOException {
+    public void withdrawProducer(String topicName) throws IOException, SizeLimitException {
         if (!isConnected())
             throw new IllegalStateException("Client is not connected");
 
@@ -198,7 +241,7 @@ public class Client implements ICallbackDriver, IResponseHandler {
     }
 
 
-    public void produce(String topicName, MessagePayload payload) throws IOException {
+    public void produce(String topicName, MessagePayload payload) throws IOException, SizeLimitException {
         if (!isConnected())
             throw new IllegalStateException("Client is not connected");
 
@@ -215,7 +258,7 @@ public class Client implements ICallbackDriver, IResponseHandler {
     }
 
 
-    public void createSubscriber(String topicName, Consumer<Message> callback) throws IOException {
+    public void createSubscriber(String topicName, Consumer<Message> callback) throws IOException, SizeLimitException {
         if (!isConnected())
             throw new IllegalStateException("Client is not connected");
 
@@ -235,7 +278,7 @@ public class Client implements ICallbackDriver, IResponseHandler {
     }
 
 
-    public void withdrawSubscriber(String topicName) throws IOException {
+    public void withdrawSubscriber(String topicName) throws IOException, SizeLimitException {
         if (!isConnected())
             throw new IllegalStateException("Client is not connected");
 
@@ -267,34 +310,31 @@ public class Client implements ICallbackDriver, IResponseHandler {
     }
 
 
-    public String getStatus() throws IOException, ErrorResponseException {
+    public String getStatus() throws IOException, ErrorResponseException, SizeLimitException {
         if (!isConnected())
             throw new IllegalStateException("Client is not connected");
 
         Message message = new Message(
                 "status",
                 clientId,
-                "logs",
+                "status",
                 "producer",
                 Instant.now(),
                 new Payload() {
                 }
         );
 
-        /*FeedbackPayload response = */
-
         sendMessage(message);
 
+        if (!statusPayload.isSuccess())
+            throw new ErrorResponseException(statusPayload.getMessage());
 
-        if (!selfStatusPayload.isSuccess())
-            throw new ErrorResponseException(selfStatusPayload.getMessage());
-
-        String json = preparePayloadForStatusesConversion(selfStatusPayload.getMessage());
+        String json = preparePayloadForStatusesConversion(statusPayload.getMessage());
         StatusResponse statusResponse = mapJsonToClass(json, StatusResponse.class);
 
         ClientTopics clientTopics = getClientTopics(statusResponse);
 
-        selfStatusPayload = null;
+        statusPayload = null;
         return convertToJson(clientTopics);
     }
 
@@ -325,6 +365,30 @@ public class Client implements ICallbackDriver, IResponseHandler {
 
         monitorThread.setDaemon(true);
         monitorThread.start();
+    }
+
+
+    /* FILE */
+
+
+    public void sendFile(String topicName, String filepath) throws IOException, SizeLimitException {
+        if (!isConnected())
+            throw new IllegalStateException("Client is not connected");
+
+        FileHandler fileHandler = new FileHandler(filepath);
+        String fileContent = fileHandler.readFile();
+        String payloadMessage = fileHandler.getFilename() + "|" + fileContent;
+
+        Message message = new Message(
+                "file",
+                clientId,
+                topicName,
+                "producer",
+                Instant.now(),
+                new MessagePayload(payloadMessage)
+        );
+
+        sendMessage(message);
     }
 
 
@@ -374,13 +438,20 @@ public class Client implements ICallbackDriver, IResponseHandler {
     @Override
     public void addNewResponse(FeedbackPayload feedbackPayload) {
         serverResponses.add(new ServerResponse(feedbackPayload.getTimestampOfMessage(), feedbackPayload));
-//        System.out.println("Server Response: " + feedbackPayload.getMessage());
+//        System.out.println("Server Response: " + feedbackPayload);
+
+        try {
+            mapJsonToClass(feedbackPayload.getMessage(), Config.class);
+            setConfig(feedbackPayload);
+            return;
+        } catch (IOException ignored) {
+        }
 
         synchronized (lock) {
             try {
                 String json = preparePayloadForStatusesConversion(feedbackPayload.getMessage());
                 mapJsonToClass(json, StatusResponse.class);
-                selfStatusPayload = feedbackPayload;
+                statusPayload = feedbackPayload;
                 lock.notify();
             } catch (IOException ignored) {
             }
@@ -390,7 +461,7 @@ public class Client implements ICallbackDriver, IResponseHandler {
 
     @Override
     public void notifySubscription(Message message) {
-        if (!message.getType().equals("message"))
+        if (!message.getType().equals("message") && !message.getType().equals("file"))
             return;
 
         String topicName = message.getTopic();
@@ -400,6 +471,19 @@ public class Client implements ICallbackDriver, IResponseHandler {
             return;
 
         callback.accept(message);
+    }
+
+
+    public void setConfig(FeedbackPayload feedbackPayload) {
+        synchronized (configLock) {
+            try {
+                serverConfig = mapJsonToClass(feedbackPayload.getMessage(), Config.class);
+                System.out.println("Server config loaded");
+                configLock.notify();
+            } catch (IOException e) {
+                throw new RuntimeException("Config mapping error");
+            }
+        }
     }
 
 

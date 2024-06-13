@@ -74,7 +74,7 @@ public class ServerListenerThread extends Thread {
 
         responseHandler.notifySubscription(message);
 
-        if (!message.getType().equals("message"))
+        if (!message.getType().equals("message") && !message.getType().equals("file"))
             responseHandler.addNewResponse((FeedbackPayload) message.getPayload());
     }
 

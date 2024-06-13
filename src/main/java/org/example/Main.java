@@ -1,34 +1,59 @@
 package org.example;
 
 import org.example.api.Client;
-import org.example.api.utilities.payload.FeedbackPayload;
+import org.example.api.utilities.FileHandler;
+import org.example.api.utilities.Message;
 import org.example.api.utilities.payload.MessagePayload;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Paths;
 
 public class Main {
     public static void main(String[] args) {
-        String topicName = "test topic";
+        String topicName = "ride a bike";
+        String otherTopicName = "eat lunch";
 
 
         try {
             Client client = new Client();
-            client.start("127.0.0.1", 7, "CID");
+            client.start("127.0.0.1", 7, "BIKER");
             client.getServerLogs((success, message) -> {
                 if (!success)
-                    System.out.println("Error: " + message);
+                    System.out.println("\nError: " + message);
                 else
-                    System.out.println("Success: " + message);
+                    System.out.println("\nSuccess: " + message);
             });
 
             client.createProducer(topicName);
-//            client.createProducer(topicName);
-//            client.createProducer(topicName + "x");
-//            client.createProducer(topicName + "y");
 
             client.createSubscriber(topicName, message -> {
-                MessagePayload messagePayload = (MessagePayload) message.getPayload();
-                System.out.println("\nPowiadomienie z: " + message.getTopic());
-                System.out.println(messagePayload.getMessage() + "\n");
+                try {
+                    handleSubscriptionMessage(topicName, message);
+                } catch (IOException e) {
+                    System.err.println(e.getMessage());
+                }
             });
+
+
+            System.out.println("Client STATUS: " + client.getStatus());
+
+            client.getServerStatus(statuses -> {
+                System.out.println("\nServer STATUS: " + statuses);
+            });
+
+
+            int counter = 0;
+            while (counter++ < 3) {
+                client.produce(topicName, new MessagePayload("Bike is waiting!"));
+                client.sendFile(topicName, "example.txt");
+                client.withdrawSubscriber(topicName);
+                System.out.println("Client STATUS: " + client.getStatus());
+                Thread.sleep(3000);
+            }
+
+//            client.withdrawProducer(topicName);
+
 
 //            client.createSubscriber(topicName + "y", message -> {
 //                MessagePayload messagePayload = (MessagePayload) message.getPayload();
@@ -36,25 +61,19 @@ public class Main {
 //                System.out.println(messagePayload.getMessage() + "\n");
 //            });
 
-            client.produce(topicName, new MessagePayload("produce for normal"));
+//            client.produce(topicName, new MessagePayload("produce for normal"));
 //            client.produce(topicName + "y", new MessagePayload("produce for y"));
 
-//            System.out.println("STATUS: " + client.getStatus());
 
-//            client.getServerStatus(message -> {
-//                System.out.println("\nSTATUS:");
-//                System.out.println(message);
-//            });
 
 //            client.stop();
 
-            client.withdrawSubscriber(topicName);
-            client.produce(topicName, new MessagePayload("produce for normal"));
+//            client.produce(topicName, new MessagePayload("produce for normal"));
 //            client.produce(topicName, new MessagePayload("produce for normal"));
 //            client.produce(topicName, new MessagePayload("produce for normal"));
 
 //            Thread.sleep(5000);
-            client.produce(topicName, new MessagePayload("produce for normal"));
+//            client.produce(topicName, new MessagePayload("produce for normal"));
 
 //            client.createSubscriber(topicName + "2222", message -> {
 //                System.out.println("YEAH");
@@ -71,5 +90,26 @@ public class Main {
             e.printStackTrace();
         }
 
+    }
+
+
+    private static void handleSubscriptionMessage(String topicName, Message message) throws IOException {
+        MessagePayload payload = (MessagePayload) message.getPayload();
+        String payloadMessage = payload.getMessage();
+
+        if (message.getType().equals("file")) {
+            String filename = payloadMessage.substring(0, payloadMessage.indexOf("|"));
+            String fileContent = payloadMessage.substring(payloadMessage.indexOf("|") + 1);
+
+            new FileHandler(filename).writeFile(fileContent);
+
+            System.out.println("\nNotification from: " + message.getTopic() + " (" + message.getType() + ")");
+            System.out.println(filename + "\n" + fileContent);
+
+            return;
+        }
+
+        System.out.println("\nNotification from: " + topicName + " (" + message.getType() + ")");
+        System.out.println(payloadMessage);
     }
 }
