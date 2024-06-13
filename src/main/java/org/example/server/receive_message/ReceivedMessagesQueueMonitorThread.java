@@ -86,6 +86,7 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
 
         if (message == null) {
             System.err.println("VALIDATION ERROR: " + receivedMessage.content());
+            receivedMessage.client().disconnect();
             return false;
         }
 
@@ -163,6 +164,7 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
             payload.setTimestampOfMessage(message.getTimestamp());
             payload.setTopicOfMessage(message.getTopic());
 
+            message.setTopic("logs");
             message.setType(payload.getType());
             message.setPayload(payload);
             message.setSenderId(serverController.getServerConfig().getServerId());
@@ -194,7 +196,7 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
 
             return message;
         } catch (JsonProcessingException e) {
-            e.printStackTrace();
+//            e.printStackTrace();
             return null;
         }
 
