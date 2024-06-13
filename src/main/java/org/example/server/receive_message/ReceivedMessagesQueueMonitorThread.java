@@ -115,6 +115,7 @@ public class ReceivedMessagesQueueMonitorThread extends Thread {
                 recipients.add(client);
                 break;
 
+            case "file":
             case "message":
                 MessageResponse response = message(client, message);
 

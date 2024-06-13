@@ -21,7 +21,8 @@ import javax.validation.constraints.NotBlank;
         @JsonSubTypes.Type(value = StatusPayload.class, name = "status"),
         @JsonSubTypes.Type(value =  MessagePayload.class, name = "message"),
         @JsonSubTypes.Type(value =  WithdrawPayload.class, name = "withdraw"),
-        @JsonSubTypes.Type(value =  ConfigPayload.class, name = "config")
+        @JsonSubTypes.Type(value =  ConfigPayload.class, name = "config"),
+        @JsonSubTypes.Type(value =  MessagePayload.class, name = "file")
 })
 @Data
 public abstract class Payload {
